@@ -5,6 +5,7 @@ const STORAGE_KEY = 'glass-and-growth.locale';
 const messages = {
   en: {
     growth: 'Growth',
+    tap: 'tap',
     discoveries: 'Discoveries',
     back: 'Back to greenhouse',
     reset: 'Reset slice',
@@ -37,6 +38,7 @@ const messages = {
   },
   ru: {
     growth: 'Рост',
+    tap: 'нажатие',
     discoveries: 'Открытия',
     back: 'Вернуться в оранжерею',
     reset: 'Сбросить прогресс',
