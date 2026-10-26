@@ -86,11 +86,7 @@ export function buyNode(state: GameState, id: NodeId): boolean {
 }
 
 export function canManualTap(state: GameState): boolean {
-  return !isUnlocked(state, 'pump');
-}
-
-export function getManualTapValue(_state: GameState): number {
-  return 1;
+  return !state.completed;
 }
 
 export function getIncomePerSecond(state: GameState): number {
@@ -105,9 +101,21 @@ export function getIncomePerSecond(state: GameState): number {
   return base * multiplier;
 }
 
+/**
+ * Active play is deliberately stronger than passive play while the player is engaged.
+ * Before automation a tap is the bootstrap source. Afterwards each tap is worth roughly
+ * half a second of the current automated economy, so its value grows with the greenhouse.
+ * At ~2 taps/sec the active contribution slightly exceeds passive production.
+ */
+export function getManualTapValue(state: GameState): number {
+  const passive = getIncomePerSecond(state);
+  if (passive <= 0) return 1;
+  return Math.max(1, passive * 0.55);
+}
+
 export function getActiveEventReward(state: GameState): number {
   const income = getIncomePerSecond(state);
-  return Math.max(3, Math.round(income * 4));
+  return Math.max(5, Math.round(income * 5));
 }
 
 export function grantGrowth(state: GameState, amount: number): void {
