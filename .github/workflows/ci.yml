@@ -15,3 +15,8 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: dist
+          if-no-files-found: error
