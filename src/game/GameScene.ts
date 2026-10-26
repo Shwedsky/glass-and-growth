@@ -15,10 +15,19 @@ import {
   type GameState,
 } from './model';
 import { BrowserPlatformAdapter } from '../platform/PlatformAdapter';
+import {
+  loadLocale,
+  nodeDescriptionKey,
+  nodeNameKey,
+  saveLocale,
+  t,
+  type Locale,
+} from '../i18n';
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
   private readonly platform = new BrowserPlatformAdapter();
+  private locale: Locale = 'en';
   private hudText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
   private treeLayer!: Phaser.GameObjects.Container;
@@ -34,6 +43,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.state = loadState();
+    this.locale = loadLocale();
     const offline = applyOfflineProgress(this.state);
     this.cameras.main.setBackgroundColor('#101814');
 
@@ -53,7 +63,7 @@ export class GameScene extends Phaser.Scene {
 
     this.renderAll();
     if (offline > 0.5) {
-      this.showToast(`While you were away: +${Math.floor(offline)} Growth`);
+      this.showToast(t(this.locale, 'offline', { value: Math.floor(offline) }));
     }
   }
 
@@ -127,7 +137,7 @@ export class GameScene extends Phaser.Scene {
     if (isUnlocked(this.state, 'roof')) this.drawEnding(cx, roofY - 10);
 
     if (this.state.unlocked.length === 0) {
-      const intro = this.add.text(cx, h * 0.48, 'The greenhouse is quiet.\nTap anywhere inside to gather Growth.', {
+      const intro = this.add.text(cx, h * 0.48, t(this.locale, 'intro'), {
         fontFamily: 'system-ui, sans-serif',
         fontSize: `${Math.max(18, Math.min(30, w / 32))}px`,
         color: '#d8e1dc',
@@ -138,7 +148,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshWorldDynamic(): void {
-    if (this.state.completed && !this.hintText?.text.includes('restored')) {
+    if (this.state.completed && this.hintText?.text !== t(this.locale, 'status_complete')) {
       this.renderAll();
     }
   }
@@ -149,14 +159,33 @@ export class GameScene extends Phaser.Scene {
     this.hudLayer.removeAll(true);
 
     const income = getIncomePerSecond(this.state);
-    this.hudText = this.add.text(20, 18, `Growth  ${Math.floor(this.state.growth)}   •   +${income.toFixed(1)}/s   •   tap +${getClickValue(this.state)}`, {
+    this.hudText = this.add.text(
+      20,
+      18,
+      `${t(this.locale, 'growth')}  ${Math.floor(this.state.growth)}   •   +${income.toFixed(1)}/s   •   ${t(this.locale, 'tap')} +${getClickValue(this.state)}`,
+      {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: `${Math.max(16, Math.min(24, w / 48))}px`,
+        color: '#eff8f2',
+        fontStyle: '600',
+      },
+    );
+
+    const languageButton = this.add.text(w - 20, h - 16, t(this.locale, 'language'), {
       fontFamily: 'system-ui, sans-serif',
-      fontSize: `${Math.max(16, Math.min(24, w / 48))}px`,
-      color: '#eff8f2',
-      fontStyle: '600',
+      fontSize: '13px',
+      color: '#d9e4dc',
+      backgroundColor: '#24372e',
+      padding: { x: 10, y: 6 },
+    }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+    languageButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      this.locale = this.locale === 'ru' ? 'en' : 'ru';
+      saveLocale(this.locale);
+      this.renderAll();
     });
 
-    const label = this.treeOpen ? 'Back to greenhouse' : 'Discoveries';
+    const label = this.treeOpen ? t(this.locale, 'back') : t(this.locale, 'discoveries');
     const treeButton = this.add.text(w - 20, 18, label, {
       fontFamily: 'system-ui, sans-serif',
       fontSize: `${Math.max(15, Math.min(22, w / 52))}px`,
@@ -170,7 +199,7 @@ export class GameScene extends Phaser.Scene {
       this.renderAll();
     });
 
-    const reset = this.add.text(20, h - 16, 'Reset slice', {
+    const reset = this.add.text(20, h - 16, t(this.locale, 'reset'), {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '13px',
       color: '#83958b',
@@ -183,24 +212,25 @@ export class GameScene extends Phaser.Scene {
     });
 
     const status = this.state.completed
-      ? 'The greenhouse is restored. P0 mini-ending reached.'
+      ? t(this.locale, 'status_complete')
       : this.treeOpen
-        ? 'Unknown nodes reveal themselves only when their path becomes possible.'
-        : 'Tap the greenhouse for active Growth. Restore systems to automate it.';
+        ? t(this.locale, 'status_tree')
+        : t(this.locale, 'status_world');
     this.hintText = this.add.text(w / 2, h - 16, status, {
       fontFamily: 'system-ui, sans-serif',
       fontSize: `${Math.max(13, Math.min(17, w / 65))}px`,
       color: this.state.completed ? '#f8e9a7' : '#aebdb5',
       align: 'center',
+      wordWrap: { width: Math.max(280, w * 0.62) },
     }).setOrigin(0.5, 1);
 
-    this.hudLayer.add([this.hudText, treeButton, reset, this.hintText]);
+    this.hudLayer.add([this.hudText, treeButton, reset, languageButton, this.hintText]);
   }
 
   private renderTree(): void {
     const w = this.scale.width;
     const h = this.scale.height;
-    const title = this.add.text(w / 2, 112, 'Discovery Tree', {
+    const title = this.add.text(w / 2, 112, t(this.locale, 'tree_title'), {
       fontFamily: 'system-ui, sans-serif',
       fontSize: `${Math.max(24, Math.min(38, w / 30))}px`,
       color: '#edf5ef',
@@ -247,7 +277,7 @@ export class GameScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: fullyAvailable && !unlocked });
       this.treeLayer.add(circle);
 
-      const visibleName = unlocked ? node.name : revealed ? '?' : '·';
+      const visibleName = unlocked ? t(this.locale, nodeNameKey(node.id)) : revealed ? '?' : '·';
       const label = this.add.text(x, y - 5, visibleName, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: unlocked ? '14px' : '24px',
@@ -267,7 +297,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (unlocked) {
-        const desc = this.add.text(x, y + radius + 7, node.description, {
+        const desc = this.add.text(x, y + radius + 7, t(this.locale, nodeDescriptionKey(node.id)), {
           fontFamily: 'system-ui, sans-serif',
           fontSize: '11px',
           color: '#9fb0a6',
@@ -284,9 +314,9 @@ export class GameScene extends Phaser.Scene {
           this.platform.analytics('discovery_unlocked', { node: node.id });
           if (node.final) void this.platform.achievement('p0_restored');
           this.renderAll();
-          this.showToast(node.final ? 'The roof opens. The greenhouse breathes.' : node.name);
+          this.showToast(node.final ? t(this.locale, 'ending_toast') : t(this.locale, nodeNameKey(node.id)));
         } else if (fullyAvailable && !affordable) {
-          this.showToast(`Need ${Math.ceil(node.cost - this.state.growth)} more Growth`);
+          this.showToast(t(this.locale, 'need_more', { value: Math.ceil(node.cost - this.state.growth) }));
         }
       });
     }
