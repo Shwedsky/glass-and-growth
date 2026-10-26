@@ -1,45 +1,48 @@
 const nodes = [
-  ['sprout', 20, 0.30, [], 'plants'],
-  ['pump', 30, 0.42, ['sprout'], 'water'],
-  ['bed', 50, 0.59, ['sprout'], 'plants'],
-  ['gutters', 80, 0.82, ['pump'], 'water'],
-  ['flowers', 125, 1.15, ['bed'], 'plants'],
-  ['glass', 250, 1.61, ['pump'], 'climate'],
-  ['cistern', 425, 2.26, ['gutters'], 'water'],
-  ['herbs', 675, 3.16, ['flowers'], 'plants'],
-  ['gears', 1100, 4.43, ['pump'], 'mechanisms'],
-  ['mirrors', 1800, 6.20, ['glass'], 'climate'],
-  ['bees', 2900, 8.68, ['flowers'], 'life'],
-  ['irrigation', 4600, 12.15, ['cistern', 'bed'], 'water'],
-  ['vines', 7300, 17.01, ['herbs'], 'plants'],
-  ['timer', 12000, 23.81, ['gears'], 'mechanisms'],
-  ['vents', 18000, 33.34, ['mirrors'], 'climate'],
-  ['butterflies', 30000, 46.67, ['flowers', 'mirrors'], 'life'],
-  ['filter', 48000, 65.34, ['irrigation'], 'water'],
-  ['pollination', 77000, 0, ['bees', 'flowers', 'gutters'], 'synergy'],
-  ['orchid', 122000, 128.06, ['vines'], 'plants'],
-  ['auto_valves', 200000, 179.29, ['timer', 'irrigation'], 'mechanisms'],
-  ['heater', 310000, 251.00, ['vents'], 'climate'],
-  ['dragonflies', 510000, 351.41, ['pond', 'bees'], 'life'],
-  ['pond', 810000, 491.97, ['filter'], 'water'],
-  ['humidity', 1300000, 0, ['pond', 'vents'], 'synergy'],
-  ['canopy', 2100000, 964.26, ['orchid'], 'plants'],
-  ['roof_drive', 3200000, 1349.96, ['auto_valves', 'vents'], 'mechanisms'],
-  ['climate', 5300000, 1889.95, ['heater'], 'climate'],
-  ['birds', 8500000, 2645.93, ['canopy', 'dragonflies'], 'life'],
-  ['ecosystem', 13000000, 0, ['birds', 'climate', 'roof_drive'], 'synergy'],
-  ['central_bud', 22000000, 5186.02, ['ecosystem', 'canopy'], 'final'],
-  ['open_roof', 35000000, 0, ['central_bud', 'roof_drive'], 'final'],
-  ['final_bloom', 56000000, 0, ['open_roof', 'birds', 'pond'], 'final'],
+  ['sprout', 24, 0.30, [], 'plants'],
+  ['pump', 36, 0.42, ['sprout'], 'water'],
+  ['bed', 60, 0.59, ['sprout'], 'plants'],
+  ['gutters', 96, 0.82, ['pump'], 'water'],
+  ['flowers', 150, 1.15, ['bed'], 'plants'],
+  ['glass', 300, 1.61, ['pump'], 'climate'],
+  ['cistern', 510, 2.26, ['gutters'], 'water'],
+  ['herbs', 810, 3.16, ['flowers'], 'plants'],
+  ['gears', 1320, 4.43, ['pump'], 'mechanisms'],
+  ['mirrors', 2160, 6.20, ['glass'], 'climate'],
+  ['bees', 3480, 8.68, ['flowers'], 'life'],
+  ['irrigation', 5520, 12.15, ['cistern', 'bed'], 'water'],
+  ['vines', 8760, 17.01, ['herbs'], 'plants'],
+  ['timer', 14400, 23.81, ['gears'], 'mechanisms'],
+  ['vents', 21600, 33.34, ['mirrors'], 'climate'],
+  ['butterflies', 36000, 46.67, ['flowers', 'mirrors'], 'life'],
+  ['filter', 57600, 65.34, ['irrigation'], 'water'],
+  ['pollination', 92400, 0, ['bees', 'flowers', 'gutters'], 'synergy'],
+  ['orchid', 146400, 128.06, ['vines'], 'plants'],
+  ['auto_valves', 240000, 179.29, ['timer', 'irrigation'], 'mechanisms'],
+  ['heater', 372000, 251.00, ['vents'], 'climate'],
+  ['dragonflies', 612000, 351.41, ['pond', 'bees'], 'life'],
+  ['pond', 972000, 491.97, ['filter'], 'water'],
+  ['humidity', 1560000, 0, ['pond', 'vents'], 'synergy'],
+  ['canopy', 2520000, 964.26, ['orchid'], 'plants'],
+  ['roof_drive', 3840000, 1349.96, ['auto_valves', 'vents'], 'mechanisms'],
+  ['climate', 6360000, 1889.95, ['heater'], 'climate'],
+  ['birds', 10200000, 2645.93, ['canopy', 'dragonflies'], 'life'],
+  ['ecosystem', 15600000, 0, ['birds', 'climate', 'roof_drive'], 'synergy'],
+  ['central_bud', 26400000, 5186.02, ['ecosystem', 'canopy'], 'final'],
+  ['open_roof', 42000000, 0, ['central_bud', 'roof_drive'], 'final'],
+  ['final_bloom', 67200000, 0, ['open_roof', 'birds', 'pond'], 'final'],
 ].map(([id, cost, income, requires, branch]) => ({ id, cost, income, requires, branch }));
 
 const byId = Object.fromEntries(nodes.map((node) => [node.id, node]));
 const multipliers = { pollination: 1.50, humidity: 1.40, ecosystem: 2.00 };
 
+// Owner playtest established the final philosophy:
+// passive = safety net, mixed = intended baseline, active = fastest intended play.
+// The active factors model average contribution over the whole session, not raw tapping bursts.
 const profiles = [
-  { id: 'passive', activeFactor: 0.00, minHours: 2.60, maxHours: 3.20 },
-  { id: 'mixed', activeFactor: 0.20, minHours: 2.20, maxHours: 2.80 },
-  { id: 'active', activeFactor: 0.35, minHours: 1.95, maxHours: 2.50 },
+  { id: 'passive', activeFactor: 0.00, minHours: 3.20, maxHours: 4.00 },
+  { id: 'mixed', activeFactor: 0.45, minHours: 2.20, maxHours: 2.80 },
+  { id: 'active', activeFactor: 0.80, minHours: 1.80, maxHours: 2.30 },
 ];
 
 const policies = [
@@ -68,12 +71,7 @@ function compareRank(a, b, rank) {
 function validateGraph() {
   if (nodes.length !== 32) throw new Error(`expected 32 nodes, found ${nodes.length}`);
   if (new Set(nodes.map((n) => n.id)).size !== nodes.length) throw new Error('duplicate node id');
-
-  for (const node of nodes) {
-    for (const req of node.requires) {
-      if (!byId[req]) throw new Error(`${node.id}: missing prerequisite ${req}`);
-    }
-  }
+  for (const node of nodes) for (const req of node.requires) if (!byId[req]) throw new Error(`${node.id}: missing prerequisite ${req}`);
 
   const visiting = new Set();
   const visited = new Set();
@@ -86,19 +84,6 @@ function validateGraph() {
     visited.add(id);
   }
   for (const node of nodes) visit(node.id);
-
-  const reachable = new Set();
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of nodes) {
-      if (!reachable.has(node.id) && node.requires.every((r) => reachable.has(r))) {
-        reachable.add(node.id);
-        changed = true;
-      }
-    }
-  }
-  if (reachable.size !== nodes.length) throw new Error(`only ${reachable.size}/${nodes.length} nodes reachable`);
 }
 
 function passiveIncome(unlocked) {
@@ -118,8 +103,8 @@ function simulate(profile, policy) {
 
   while (!unlocked.has('final_bloom') && time < maxSeconds) {
     const passive = passiveIncome(unlocked);
-    const earlyFloor = time < 600 ? 1 : 0;
-    const activeBonus = Math.max(earlyFloor, passive * profile.activeFactor);
+    const bootstrap = passive <= 0 ? 1 : 0;
+    const activeBonus = Math.max(bootstrap, passive * profile.activeFactor);
     growth += passive + activeBonus;
 
     while (true) {
@@ -138,16 +123,8 @@ function simulate(profile, policy) {
   }
 
   if (!unlocked.has('final_bloom')) throw new Error(`${profile.id}/${policy.id}: did not reach Final Bloom within 6 hours`);
-
   const waits = timeline.map((event, index) => event.second - (index === 0 ? 0 : timeline[index - 1].second));
-  return {
-    profile: profile.id,
-    policy: policy.id,
-    seconds: time,
-    hours: time / 3600,
-    longestWaitSeconds: Math.max(...waits),
-    purchased: timeline.length,
-  };
+  return { profile: profile.id, policy: policy.id, seconds: time, hours: time / 3600, longestWaitSeconds: Math.max(...waits), purchased: timeline.length };
 }
 
 function formatTime(seconds) {
@@ -166,7 +143,6 @@ for (const profile of profiles) {
     const result = simulate(profile, policy);
     const longestWaitMinutes = result.longestWaitSeconds / 60;
     globalWorstGap = Math.max(globalWorstGap, result.longestWaitSeconds);
-
     console.log(`\n[${profile.id}/${policy.id}]`);
     console.log(`completion: ${formatTime(result.seconds)} (${result.hours.toFixed(2)}h)`);
     console.log(`longest purchase gap: ${longestWaitMinutes.toFixed(1)} min`);
@@ -188,5 +164,5 @@ for (const profile of profiles) {
 }
 
 if (failed) process.exit(1);
-console.log(`\nP1 progression simulation passed across ${profiles.length * policies.length} profile/policy combinations.`);
+console.log(`\nP2 active-first progression passed across ${profiles.length * policies.length} profile/policy combinations.`);
 console.log(`Worst validated purchase gap: ${(globalWorstGap / 60).toFixed(1)} min.`);
