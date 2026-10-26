@@ -23,6 +23,7 @@ export class GameScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private treeLayer!: Phaser.GameObjects.Container;
   private worldLayer!: Phaser.GameObjects.Container;
+  private hudLayer!: Phaser.GameObjects.Container;
   private treeOpen = false;
   private accumulator = 0;
   private lastSaveAt = 0;
@@ -38,6 +39,7 @@ export class GameScene extends Phaser.Scene {
 
     this.worldLayer = this.add.container(0, 0);
     this.treeLayer = this.add.container(0, 0).setVisible(false);
+    this.hudLayer = this.add.container(0, 0).setDepth(1000);
 
     this.scale.on('resize', () => this.renderAll());
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -74,10 +76,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderAll(): void {
+    this.tweens.killTweensOf(this.worldLayer.getAll());
     this.worldLayer.removeAll(true);
     this.treeLayer.removeAll(true);
     this.renderWorld();
     this.renderTree();
+    this.worldLayer.setVisible(!this.treeOpen);
+    this.treeLayer.setVisible(this.treeOpen);
     this.renderHud();
   }
 
@@ -141,8 +146,7 @@ export class GameScene extends Phaser.Scene {
   private renderHud(): void {
     const w = this.scale.width;
     const h = this.scale.height;
-    this.hudText?.destroy();
-    this.hintText?.destroy();
+    this.hudLayer.removeAll(true);
 
     const income = getIncomePerSecond(this.state);
     this.hudText = this.add.text(20, 18, `Growth  ${Math.floor(this.state.growth)}   •   +${income.toFixed(1)}/s   •   tap +${getClickValue(this.state)}`, {
@@ -150,7 +154,7 @@ export class GameScene extends Phaser.Scene {
       fontSize: `${Math.max(16, Math.min(24, w / 48))}px`,
       color: '#eff8f2',
       fontStyle: '600',
-    }).setDepth(1000);
+    });
 
     const label = this.treeOpen ? 'Back to greenhouse' : 'Discoveries';
     const treeButton = this.add.text(w - 20, 18, label, {
@@ -159,12 +163,10 @@ export class GameScene extends Phaser.Scene {
       color: '#f1e7bd',
       backgroundColor: '#2c4738',
       padding: { x: 14, y: 9 },
-    }).setOrigin(1, 0).setInteractive({ useHandCursor: true }).setDepth(1001);
+    }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
     treeButton.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.treeOpen = !this.treeOpen;
-      this.treeLayer.setVisible(this.treeOpen);
-      this.worldLayer.setVisible(!this.treeOpen);
       this.renderAll();
     });
 
@@ -172,7 +174,7 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '13px',
       color: '#83958b',
-    }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setDepth(1001);
+    }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
     reset.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.state = resetState();
@@ -190,7 +192,9 @@ export class GameScene extends Phaser.Scene {
       fontSize: `${Math.max(13, Math.min(17, w / 65))}px`,
       color: this.state.completed ? '#f8e9a7' : '#aebdb5',
       align: 'center',
-    }).setOrigin(0.5, 1).setDepth(1000);
+    }).setOrigin(0.5, 1);
+
+    this.hudLayer.add([this.hudText, treeButton, reset, this.hintText]);
   }
 
   private renderTree(): void {
