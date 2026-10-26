@@ -26,16 +26,19 @@ import {
   type Locale,
 } from '../i18n';
 
-const TREE_STAGE_HEIGHT = 145;
-const TREE_TOP = 165;
-const TREE_CONTENT_HEIGHT = TREE_TOP + TREE_STAGE_HEIGHT * 13 + 160;
+const TREE_STAGE_HEIGHT = 138;
+const TREE_TOP = 220;
+const TREE_CONTENT_HEIGHT = TREE_TOP + TREE_STAGE_HEIGHT * 13 + 170;
+const MAIN_BRANCHES: Branch[] = ['water', 'plants', 'climate', 'mechanisms', 'life'];
 
 export class GameScene extends Phaser.Scene {
   private state!: GameState;
   private readonly platform = new BrowserPlatformAdapter();
   private locale: Locale = 'en';
+
   private worldLayer!: Phaser.GameObjects.Container;
   private treeLayer!: Phaser.GameObjects.Container;
+  private treeContentLayer!: Phaser.GameObjects.Container;
   private hudLayer!: Phaser.GameObjects.Container;
   private hudText!: Phaser.GameObjects.Text;
   private stageText!: Phaser.GameObjects.Text;
@@ -43,6 +46,7 @@ export class GameScene extends Phaser.Scene {
   private treeButton!: Phaser.GameObjects.Text;
   private languageButton!: Phaser.GameObjects.Text;
   private resetButton!: Phaser.GameObjects.Text;
+
   private treeOpen = false;
   private treeScroll = 0;
   private draggingTree = false;
@@ -66,6 +70,8 @@ export class GameScene extends Phaser.Scene {
 
     this.worldLayer = this.add.container(0, 0);
     this.treeLayer = this.add.container(0, 0).setVisible(false);
+    this.treeContentLayer = this.add.container(0, 0);
+    this.treeLayer.add(this.treeContentLayer);
     this.hudLayer = this.add.container(0, 0).setDepth(1000);
 
     this.createHud();
@@ -86,7 +92,7 @@ export class GameScene extends Phaser.Scene {
       if (this.activeEventCountdown <= 0 && !this.activeEvent) this.spawnActiveEvent();
     }
 
-    if (this.uiAccumulator >= 0.25) {
+    if (this.uiAccumulator >= 0.20) {
       this.uiAccumulator = 0;
       this.updateHud();
     }
@@ -107,19 +113,19 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (this.treeOpen) {
-        if (pointer.y > 90) {
+        if (pointer.y > 145) {
           this.draggingTree = true;
           this.treeDragMoved = false;
           this.treeDragLastY = pointer.y;
         }
         return;
       }
-      if (pointer.y < 92 || pointer.y > this.scale.height - 60) return;
-      if (!canManualTap(this.state)) return;
+
+      if (pointer.y < 92 || pointer.y > this.scale.height - 60 || !canManualTap(this.state)) return;
       const amount = getManualTapValue(this.state);
       grantGrowth(this.state, amount);
       this.spawnTapFeedback(pointer.x, pointer.y, amount);
-      this.platform.analytics('bootstrap_tap');
+      this.platform.analytics('manual_tap', { amount });
       this.updateHud();
     });
 
@@ -160,12 +166,14 @@ export class GameScene extends Phaser.Scene {
       this.treeLayer.setVisible(this.treeOpen);
       this.updateHud();
     });
+
     this.languageButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.locale = this.locale === 'ru' ? 'en' : 'ru';
       saveLocale(this.locale);
       this.renderAll();
     });
+
     this.resetButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.state = resetState();
@@ -182,7 +190,7 @@ export class GameScene extends Phaser.Scene {
   private renderAll(): void {
     this.tweens.killTweensOf(this.worldLayer.getAll());
     this.worldLayer.removeAll(true);
-    this.treeLayer.removeAll(true);
+    this.treeContentLayer.removeAll(true);
     this.renderWorld();
     this.renderTree();
     this.worldLayer.setVisible(!this.treeOpen);
@@ -195,10 +203,12 @@ export class GameScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
     const income = getIncomePerSecond(this.state);
-    const manual = canManualTap(this.state) ? `  •  tap +${getManualTapValue(this.state)}` : '';
+    const tapValue = getManualTapValue(this.state);
 
-    this.hudText.setText(`${t(this.locale, 'growth')}  ${this.formatNumber(this.state.growth)}   •   +${this.formatNumber(income)}${t(this.locale, 'per_second')}${manual}`);
-    this.hudText.setFontSize(Math.max(15, Math.min(21, w / 50)));
+    this.hudText.setText(
+      `${t(this.locale, 'growth')}  ${this.formatNumber(this.state.growth)}   •   +${this.formatNumber(income)}${t(this.locale, 'per_second')}   •   ${t(this.locale, 'tap')} +${this.formatNumber(tapValue)}`,
+    );
+    this.hudText.setFontSize(Math.max(14, Math.min(21, w / 52)));
     this.stageText.setText(t(this.locale, 'stage', { value: this.state.unlocked.length }));
 
     this.treeButton.setText(this.treeOpen ? t(this.locale, 'back') : t(this.locale, 'discoveries')).setPosition(w - 20, 18);
@@ -209,7 +219,7 @@ export class GameScene extends Phaser.Scene {
       ? t(this.locale, 'status_complete')
       : this.treeOpen
         ? t(this.locale, 'status_tree')
-        : canManualTap(this.state)
+        : this.state.unlocked.length === 0
           ? t(this.locale, 'status_bootstrap')
           : t(this.locale, 'status_world');
     this.hintText.setText(status).setPosition(w / 2, h - 14).setWordWrapWidth(Math.max(260, w * 0.58));
@@ -224,52 +234,46 @@ export class GameScene extends Phaser.Scene {
     const innerW = Math.min(w * 0.90, 1080);
     const left = cx - innerW / 2;
     const roofY = top + 48;
+    const progress = this.state.unlocked.length / DISCOVERY_NODES.length;
 
-    const aliveRatio = this.state.unlocked.length / DISCOVERY_NODES.length;
-    const bgColor = aliveRatio > 0.65 ? 0x243c2b : aliveRatio > 0.3 ? 0x203226 : 0x1b2821;
-    const bg = this.add.rectangle(cx, (top + bottom) / 2, innerW, bottom - top, bgColor, 1)
-      .setStrokeStyle(3, 0x8fa99b, 0.35);
-    this.worldLayer.add(bg);
+    const bgColor = progress > 0.70 ? 0x294331 : progress > 0.35 ? 0x213529 : 0x1b2821;
+    this.worldLayer.add(
+      this.add.rectangle(cx, (top + bottom) / 2, innerW, bottom - top, bgColor)
+        .setStrokeStyle(3, 0x8fa99b, 0.35),
+    );
 
-    const roof = this.add.graphics();
-    roof.lineStyle(4, isUnlocked(this.state, 'glass') ? 0xb8cec2 : 0x74867d, 0.75);
-    roof.beginPath();
-    roof.moveTo(left + 28, roofY + 55);
-    roof.lineTo(cx - 115, roofY - 22);
-    roof.lineTo(cx + 115, roofY - 22);
-    roof.lineTo(left + innerW - 28, roofY + 55);
-    roof.strokePath();
+    const frame = this.add.graphics();
+    frame.lineStyle(4, isUnlocked(this.state, 'glass') ? 0xb8cec2 : 0x74867d, 0.75);
+    frame.beginPath();
+    frame.moveTo(left + 28, roofY + 55);
+    frame.lineTo(cx - 115, roofY - 22);
+    frame.lineTo(cx + 115, roofY - 22);
+    frame.lineTo(left + innerW - 28, roofY + 55);
+    frame.strokePath();
     for (let i = 1; i < 8; i++) {
       const x = left + (innerW / 8) * i;
-      roof.lineBetween(x, roofY + 44, x, bottom - 18);
+      frame.lineBetween(x, roofY + 44, x, bottom - 18);
     }
-    this.worldLayer.add(roof);
-
+    this.worldLayer.add(frame);
     this.worldLayer.add(this.add.rectangle(cx, bottom - 44, innerW - 34, 74, 0x3d3027));
 
-    if (isUnlocked(this.state, 'glass')) this.drawSunbeams(cx, roofY + 70);
-    if (isUnlocked(this.state, 'sprout')) this.drawSprout(cx, bottom - 77, isUnlocked(this.state, 'central_bud'));
-    if (isUnlocked(this.state, 'bed')) this.drawBed(cx - 220, bottom - 90);
-    if (isUnlocked(this.state, 'flowers')) this.drawFlowers(cx + 160, bottom - 88);
-    if (isUnlocked(this.state, 'vines')) this.drawVines(left + 55, roofY + 90, bottom - 80);
-    if (isUnlocked(this.state, 'canopy')) this.drawCanopy(cx, roofY + 82, innerW * 0.62);
-    if (isUnlocked(this.state, 'pump')) this.drawPump(left + 105, bottom - 112);
-    if (isUnlocked(this.state, 'gutters')) this.drawGutters(left, innerW, roofY + 50);
-    if (isUnlocked(this.state, 'cistern')) this.drawCistern(left + innerW - 110, bottom - 112);
-    if (isUnlocked(this.state, 'irrigation')) this.drawIrrigation(cx, bottom - 120, innerW * 0.55);
-    if (isUnlocked(this.state, 'pond')) this.drawPond(cx + 280, bottom - 95);
-    if (isUnlocked(this.state, 'mirrors')) this.drawMirrors(cx - 320, roofY + 105);
-    if (isUnlocked(this.state, 'vents')) this.drawVents(cx, roofY - 8);
-    if (isUnlocked(this.state, 'heater')) this.drawHeater(left + 200, bottom - 120);
-    if (isUnlocked(this.state, 'gears')) this.drawMechanism(left + innerW - 215, bottom - 150);
-    if (isUnlocked(this.state, 'auto_valves')) this.drawValves(left + innerW - 205, bottom - 75);
-    if (isUnlocked(this.state, 'bees')) this.drawCreature(cx + 215, bottom - 180, 'bee');
-    if (isUnlocked(this.state, 'butterflies')) this.drawCreature(cx - 120, bottom - 210, 'butterfly');
-    if (isUnlocked(this.state, 'dragonflies')) this.drawCreature(cx + 330, bottom - 195, 'dragonfly');
-    if (isUnlocked(this.state, 'birds')) this.drawBirds(cx, roofY + 125);
-    if (isUnlocked(this.state, 'pollination')) this.drawAmbientGlow(cx, bottom - 150, 0xd9cb76, 0.10);
+    if (isUnlocked(this.state, 'glass')) this.drawSunlight(cx, roofY + 60);
+    if (isUnlocked(this.state, 'sprout')) this.drawPlant(cx, bottom - 78, isUnlocked(this.state, 'central_bud'));
+    if (isUnlocked(this.state, 'bed')) this.drawBed(cx - 230, bottom - 88);
+    if (isUnlocked(this.state, 'flowers')) this.drawFlowers(cx + 155, bottom - 88);
+    if (isUnlocked(this.state, 'vines')) this.drawVines(left + 60, roofY + 100, bottom - 82);
+    if (isUnlocked(this.state, 'canopy')) this.drawCanopy(cx, roofY + 92, innerW * 0.60);
+    if (isUnlocked(this.state, 'pump')) this.drawMachine(left + 105, bottom - 112, 0x856b4a);
+    if (isUnlocked(this.state, 'cistern')) this.worldLayer.add(this.add.ellipse(left + innerW - 110, bottom - 112, 92, 105, 0x536d6d));
+    if (isUnlocked(this.state, 'pond')) this.worldLayer.add(this.add.ellipse(cx + 280, bottom - 95, 190, 72, 0x4f8084, 0.75));
+    if (isUnlocked(this.state, 'gears')) this.drawGears(left + innerW - 205, bottom - 150);
+    if (isUnlocked(this.state, 'heater')) this.drawMachine(left + 200, bottom - 115, 0x765f50);
+    if (isUnlocked(this.state, 'bees')) this.drawMovingDot(cx + 215, bottom - 180, 0xe1bd50, 55);
+    if (isUnlocked(this.state, 'butterflies')) this.drawMovingDot(cx - 120, bottom - 205, 0xc39bd1, 75);
+    if (isUnlocked(this.state, 'dragonflies')) this.drawMovingDot(cx + 330, bottom - 195, 0x79aeb4, 90);
+    if (isUnlocked(this.state, 'pollination')) this.drawGlow(cx, bottom - 150, 0xd9cb76, 0.08);
     if (isUnlocked(this.state, 'humidity')) this.drawMist(cx, bottom - 165, innerW * 0.65);
-    if (isUnlocked(this.state, 'ecosystem')) this.drawAmbientGlow(cx, (roofY + bottom) / 2, 0x9dcf89, 0.08, 210);
+    if (isUnlocked(this.state, 'ecosystem')) this.drawGlow(cx, (roofY + bottom) / 2, 0x9dcf89, 0.06, 210);
     if (isUnlocked(this.state, 'open_roof')) this.drawOpenRoof(cx, roofY);
     if (isUnlocked(this.state, 'final_bloom')) this.drawFinalBloom(cx, bottom - 215);
 
@@ -284,33 +288,70 @@ export class GameScene extends Phaser.Scene {
     const w = this.scale.width;
     const title = this.add.text(w / 2, 100, t(this.locale, 'tree_title'), {
       fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(24, Math.min(36, w / 32))}px`, color: '#edf5ef', fontStyle: '700',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(5);
     const help = this.add.text(w / 2, 132, t(this.locale, 'tree_help'), {
-      fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#82958a', align: 'center',
-    }).setOrigin(0.5);
+      fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#82958a', align: 'center', wordWrap: { width: w * 0.72 },
+    }).setOrigin(0.5).setDepth(5);
     this.treeLayer.add([title, help]);
+
+    const branchColors: Record<Branch, number> = {
+      water: 0x4f8290,
+      plants: 0x5c8b55,
+      climate: 0x9b8c52,
+      mechanisms: 0x817968,
+      life: 0x8b6380,
+      synergy: 0xc2a65c,
+      final: 0xb67b5b,
+    };
 
     const positions = new Map<NodeId, Phaser.Math.Vector2>();
     for (const node of DISCOVERY_NODES) {
-      const synergyOffset = node.branch === 'synergy' ? 58 : 0;
-      const finalOffset = node.branch === 'final' ? 20 : 0;
-      positions.set(node.id, new Phaser.Math.Vector2(w * BRANCH_X[node.branch], TREE_TOP + node.stage * TREE_STAGE_HEIGHT + synergyOffset + finalOffset));
+      const offset = node.branch === 'synergy' ? 56 : node.branch === 'final' ? 24 : 0;
+      positions.set(
+        node.id,
+        new Phaser.Math.Vector2(w * BRANCH_X[node.branch], TREE_TOP + node.stage * TREE_STAGE_HEIGHT + offset),
+      );
     }
 
-    const lines = this.add.graphics();
-    lines.lineStyle(2, 0x60766a, 0.42);
+    // Stable branch lanes make the large tree readable before any individual link is inspected.
+    for (const branch of MAIN_BRANCHES) {
+      const x = w * BRANCH_X[branch];
+      const lane = this.add.graphics();
+      lane.lineStyle(2, branchColors[branch], 0.12);
+      lane.lineBetween(x, TREE_TOP - 34, x, TREE_CONTENT_HEIGHT - 100);
+      this.treeContentLayer.add(lane);
+
+      const label = this.add.text(x, TREE_TOP - 58, this.branchLabel(branch), {
+        fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#9eafa5', align: 'center',
+      }).setOrigin(0.5);
+      this.treeContentLayer.add(label);
+    }
+
+    // Only links whose child is already relevant are rendered. Future mystery stays visible as dots,
+    // but the player is not forced to read the entire dependency graph at once.
+    const links = this.add.graphics();
     for (const node of DISCOVERY_NODES) {
-      const p2 = positions.get(node.id)!;
+      const visibleChild = isRevealed(this.state, node.id) || isUnlocked(this.state, node.id);
+      if (!visibleChild) continue;
+      const child = positions.get(node.id)!;
       for (const req of node.requires) {
-        const p1 = positions.get(req)!;
-        lines.lineBetween(p1.x, p1.y, p2.x, p2.y);
+        const parent = positions.get(req)!;
+        const sameLane = Math.abs(parent.x - child.x) < 3;
+        links.lineStyle(2, branchColors[node.branch], isUnlocked(this.state, node.id) ? 0.62 : 0.34);
+        if (sameLane) {
+          links.lineBetween(parent.x, parent.y, child.x, child.y);
+        } else {
+          const midY = parent.y + (child.y - parent.y) * 0.55;
+          links.beginPath();
+          links.moveTo(parent.x, parent.y);
+          links.lineTo(parent.x, midY);
+          links.lineTo(child.x, midY);
+          links.lineTo(child.x, child.y);
+          links.strokePath();
+        }
       }
     }
-    this.treeLayer.add(lines);
-
-    const branchColors: Record<Branch, number> = {
-      water: 0x426f78, plants: 0x50784d, climate: 0x7d7449, life: 0x76576f, mechanisms: 0x6d675a, synergy: 0x826d3e, final: 0x8c674c,
-    };
+    this.treeContentLayer.add(links);
 
     for (const node of DISCOVERY_NODES) {
       const p = positions.get(node.id)!;
@@ -318,21 +359,44 @@ export class GameScene extends Phaser.Scene {
       const revealed = isRevealed(this.state, node.id);
       const available = node.requires.every((req) => isUnlocked(this.state, req));
       const affordable = this.state.growth >= node.cost;
-      const radius = Math.max(28, Math.min(42, w / 28));
-      const circle = this.add.circle(p.x, p.y, radius, unlocked ? branchColors[node.branch] : available ? 0x6d5a35 : 0x26342d, revealed || unlocked ? 1 : 0.58)
-        .setStrokeStyle(3, affordable && available && !unlocked ? 0xe3d388 : 0x71857a, 0.85)
-        .setInteractive({ useHandCursor: true });
-      this.treeLayer.add(circle);
+      const radius = Math.max(25, Math.min(38, w / 31));
 
-      const label = this.add.text(p.x, p.y - 2, unlocked ? t(this.locale, nodeNameKey(node.id)) : revealed ? '?' : '·', {
-        fontFamily: 'system-ui, sans-serif', fontSize: unlocked ? '12px' : '23px', color: '#f4f5ec', align: 'center', wordWrap: { width: radius * 1.8 },
-      }).setOrigin(0.5);
-      this.treeLayer.add(label);
+      const circle = this.add.circle(
+        p.x,
+        p.y,
+        radius,
+        unlocked ? branchColors[node.branch] : available ? 0x6d5a35 : 0x25322c,
+        revealed || unlocked ? 1 : 0.45,
+      ).setStrokeStyle(
+        affordable && available && !unlocked ? 3 : 2,
+        affordable && available && !unlocked ? 0xe7d78e : branchColors[node.branch],
+        unlocked ? 0.95 : 0.48,
+      ).setInteractive({ useHandCursor: true });
+      this.treeContentLayer.add(circle);
 
-      const info = this.add.text(p.x, p.y + radius + 7, unlocked ? this.nodeEffectText(node.id) : revealed ? this.formatNumber(node.cost) : '', {
-        fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: available ? '#d9cfaa' : '#6f7e75', align: 'center', wordWrap: { width: 115 },
-      }).setOrigin(0.5, 0);
-      this.treeLayer.add(info);
+      const label = this.add.text(
+        p.x,
+        p.y - 2,
+        unlocked ? t(this.locale, nodeNameKey(node.id)) : revealed ? '?' : '·',
+        {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: unlocked ? '11px' : revealed ? '23px' : '18px',
+          color: '#f4f5ec',
+          align: 'center',
+          wordWrap: { width: radius * 1.85 },
+        },
+      ).setOrigin(0.5);
+      this.treeContentLayer.add(label);
+
+      const info = this.add.text(
+        p.x,
+        p.y + radius + 6,
+        unlocked ? this.nodeEffectText(node.id) : revealed ? this.formatNumber(node.cost) : '',
+        {
+          fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: available ? '#d9cfaa' : '#6f7e75', align: 'center', wordWrap: { width: 108 },
+        },
+      ).setOrigin(0.5, 0);
+      this.treeContentLayer.add(info);
 
       circle.on('pointerup', (_pointer: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
         event.stopPropagation();
@@ -354,6 +418,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private branchLabel(branch: Branch): string {
+    if (branch === 'water') return t(this.locale, 'branch_water');
+    if (branch === 'plants') return t(this.locale, 'branch_plants');
+    if (branch === 'climate') return t(this.locale, 'branch_climate');
+    if (branch === 'mechanisms') return t(this.locale, 'branch_mechanisms');
+    if (branch === 'life') return t(this.locale, 'branch_life');
+    return '';
+  }
+
   private nodeEffectText(id: NodeId): string {
     const node = NODE_BY_ID[id];
     if (node.multiplier) return `×${node.multiplier.toFixed(2)}`;
@@ -364,7 +437,7 @@ export class GameScene extends Phaser.Scene {
   private setTreeScroll(value: number): void {
     const min = Math.min(0, this.scale.height - TREE_CONTENT_HEIGHT);
     this.treeScroll = Phaser.Math.Clamp(value, min, 0);
-    this.treeLayer.y = this.treeScroll;
+    this.treeContentLayer.y = this.treeScroll;
   }
 
   private spawnActiveEvent(): void {
@@ -374,12 +447,15 @@ export class GameScene extends Phaser.Scene {
     const x = Phaser.Math.Between(Math.max(80, Math.floor(w * 0.15)), Math.max(100, Math.floor(w * 0.85)));
     const y = Phaser.Math.Between(145, Math.max(180, h - 125));
     const container = this.add.container(x, y).setDepth(900);
-    const pulse = this.add.circle(0, 0, 24, 0xd7cb75, 0.18).setStrokeStyle(3, 0xe8dc93, 0.9);
-    const core = this.add.circle(0, 0, 9, 0xe8dc93, 0.95);
-    const text = this.add.text(0, 34, t(this.locale, 'event_hint'), { fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#e8dcaa' }).setOrigin(0.5);
+    const pulse = this.add.circle(0, 0, 26, 0xd7cb75, 0.18).setStrokeStyle(3, 0xe8dc93, 0.9);
+    const core = this.add.circle(0, 0, 10, 0xe8dc93, 0.95);
+    const text = this.add.text(0, 36, t(this.locale, 'event_hint'), {
+      fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#e8dcaa',
+    }).setOrigin(0.5);
     container.add([pulse, core, text]);
     pulse.setInteractive({ useHandCursor: true });
     core.setInteractive({ useHandCursor: true });
+
     const collect = (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       if (!this.activeEvent) return;
@@ -414,7 +490,7 @@ export class GameScene extends Phaser.Scene {
     const text = this.add.text(x, y, t(this.locale, 'event_reward', { value: this.formatNumber(amount) }), {
       fontFamily: 'system-ui, sans-serif', fontSize: '17px', color: '#dcedc8', fontStyle: '700',
     }).setOrigin(0.5).setDepth(1200);
-    this.tweens.add({ targets: text, y: y - 38, alpha: 0, duration: 700, onComplete: () => text.destroy() });
+    this.tweens.add({ targets: text, y: y - 38, alpha: 0, duration: 620, onComplete: () => text.destroy() });
   }
 
   private showToast(message: string): void {
@@ -434,7 +510,7 @@ export class GameScene extends Phaser.Scene {
     return value.toFixed(abs < 1 ? 2 : 1);
   }
 
-  private drawSprout(x: number, y: number, bud: boolean): void {
+  private drawPlant(x: number, y: number, bud: boolean): void {
     const height = bud ? 145 : 58;
     const stem = this.add.rectangle(x, y, bud ? 12 : 8, height, 0x5f8752).setOrigin(0.5, 1);
     const leafA = this.add.ellipse(x - 18, y - height * 0.65, 35, 16, 0x719c5f).setRotation(-0.35);
@@ -445,7 +521,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawBed(x: number, y: number): void {
     const box = this.add.rectangle(x, y, 170, 42, 0x765a3c).setStrokeStyle(2, 0xa4855f);
-    const greens = [-55, -20, 20, 55].map((dx, i) => this.add.ellipse(x + dx, y - 28 - (i % 2) * 6, 32, 44, 0x557c4e + i * 0x030200));
+    const greens = [-55, -20, 20, 55].map((dx, i) => this.add.ellipse(x + dx, y - 28 - (i % 2) * 6, 32, 44, 0x557c4e));
     this.worldLayer.add([box, ...greens]);
   }
 
@@ -463,8 +539,10 @@ export class GameScene extends Phaser.Scene {
   private drawVines(x: number, top: number, bottom: number): void {
     const g = this.add.graphics();
     g.lineStyle(5, 0x547b4f, 0.9);
-    g.beginPath(); g.moveTo(x, bottom); g.lineTo(x + 15, top); g.strokePath();
-    for (let y = bottom - 35; y > top; y -= 45) this.worldLayer.add(this.add.ellipse(x + Phaser.Math.Between(-8, 25), y, 28, 14, 0x668e5e).setRotation(Phaser.Math.FloatBetween(-0.5, 0.5)));
+    g.beginPath();
+    g.moveTo(x, bottom);
+    g.lineTo(x + 15, top);
+    g.strokePath();
     this.worldLayer.add(g);
   }
 
@@ -475,90 +553,37 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private drawPump(x: number, y: number): void {
-    const body = this.add.rectangle(x, y, 62, 64, 0x856b4a).setStrokeStyle(3, 0xb59a6c);
-    const pipe = this.add.rectangle(x + 46, y - 12, 60, 14, 0x687a70);
-    const water = this.add.circle(x + 76, y - 2, 7, 0x7fb9c4, 0.85);
-    this.worldLayer.add([body, pipe, water]);
+  private drawMachine(x: number, y: number, color: number): void {
+    this.worldLayer.add(this.add.rectangle(x, y, 70, 72, color).setStrokeStyle(3, 0xa88d70));
   }
 
-  private drawGutters(left: number, width: number, y: number): void {
-    this.worldLayer.add(this.add.rectangle(left + width / 2, y, width - 70, 8, 0x70857b));
+  private drawGears(x: number, y: number): void {
+    const a = this.add.circle(x, y, 30, 0x807663).setStrokeStyle(6, 0xa69a7e);
+    const b = this.add.circle(x + 45, y + 22, 20, 0x716a5d).setStrokeStyle(5, 0x978d77);
+    this.worldLayer.add([a, b]);
+    this.tweens.add({ targets: a, rotation: Math.PI * 2, duration: 6000, repeat: -1 });
+    this.tweens.add({ targets: b, rotation: -Math.PI * 2, duration: 4200, repeat: -1 });
   }
 
-  private drawCistern(x: number, y: number): void {
-    this.worldLayer.add(this.add.ellipse(x, y, 92, 105, 0x536d6d).setStrokeStyle(3, 0x8fa59a));
-  }
-
-  private drawIrrigation(x: number, y: number, width: number): void {
-    const g = this.add.graphics(); g.lineStyle(4, 0x668a86, 0.8); g.lineBetween(x - width / 2, y, x + width / 2, y);
-    for (let i = -3; i <= 3; i++) g.lineBetween(x + i * width / 7, y, x + i * width / 7, y + 30);
-    this.worldLayer.add(g);
-  }
-
-  private drawPond(x: number, y: number): void {
-    this.worldLayer.add(this.add.ellipse(x, y, 190, 72, 0x4f8084, 0.75).setStrokeStyle(3, 0x78a8a5));
-  }
-
-  private drawSunbeams(x: number, y: number): void {
-    const light = this.add.triangle(x, y + 120, -130, -120, 130, -120, 0, 180, 0xe6dfaf, 0.07);
-    this.worldLayer.add(light);
-  }
-
-  private drawMirrors(x: number, y: number): void {
-    this.worldLayer.add(this.add.rectangle(x, y, 80, 18, 0xb6b8a2).setRotation(-0.28).setStrokeStyle(2, 0xd8d6bd));
-  }
-
-  private drawVents(x: number, y: number): void {
-    this.worldLayer.add([
-      this.add.rectangle(x - 70, y, 85, 18, 0x6f8178).setRotation(-0.35),
-      this.add.rectangle(x + 70, y, 85, 18, 0x6f8178).setRotation(0.35),
-    ]);
-  }
-
-  private drawHeater(x: number, y: number): void {
-    this.worldLayer.add(this.add.rectangle(x, y, 78, 95, 0x765f50).setStrokeStyle(3, 0xa88469));
-    const glow = this.add.circle(x, y, 28, 0xd79c65, 0.12); this.worldLayer.add(glow);
-    this.tweens.add({ targets: glow, alpha: 0.25, duration: 1000, yoyo: true, repeat: -1 });
-  }
-
-  private drawMechanism(x: number, y: number): void {
-    const gearA = this.add.circle(x, y, 30, 0x807663).setStrokeStyle(6, 0xa69a7e);
-    const gearB = this.add.circle(x + 45, y + 22, 20, 0x716a5d).setStrokeStyle(5, 0x978d77);
-    this.worldLayer.add([gearA, gearB]);
-    this.tweens.add({ targets: gearA, rotation: Math.PI * 2, duration: 6000, repeat: -1 });
-    this.tweens.add({ targets: gearB, rotation: -Math.PI * 2, duration: 4200, repeat: -1 });
-  }
-
-  private drawValves(x: number, y: number): void {
-    this.worldLayer.add([
-      this.add.circle(x - 25, y, 17, 0x8b765b).setStrokeStyle(4, 0xc0a17b),
-      this.add.circle(x + 25, y, 17, 0x8b765b).setStrokeStyle(4, 0xc0a17b),
-    ]);
-  }
-
-  private drawCreature(x: number, y: number, kind: 'bee' | 'butterfly' | 'dragonfly'): void {
-    const color = kind === 'bee' ? 0xe1bd50 : kind === 'butterfly' ? 0xc39bd1 : 0x79aeb4;
-    const creature = this.add.circle(x, y, kind === 'dragonfly' ? 7 : 6, color);
+  private drawMovingDot(x: number, y: number, color: number, distance: number): void {
+    const creature = this.add.circle(x, y, 7, color);
     this.worldLayer.add(creature);
-    this.tweens.add({ targets: creature, x: x + 70, y: y - 24, duration: kind === 'bee' ? 1200 : 1800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    this.tweens.add({ targets: creature, x: x + distance, y: y - 22, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
 
-  private drawBirds(x: number, y: number): void {
-    const g = this.add.graphics(); g.lineStyle(3, 0xc9d0c8, 0.8);
-    g.beginPath(); g.moveTo(x - 70, y); g.lineTo(x - 55, y - 9); g.lineTo(x - 40, y); g.moveTo(x + 35, y + 18); g.lineTo(x + 50, y + 8); g.lineTo(x + 65, y + 18); g.strokePath();
-    this.worldLayer.add(g);
+  private drawSunlight(x: number, y: number): void {
+    this.worldLayer.add(this.add.triangle(x, y + 120, -130, -120, 130, -120, 0, 180, 0xe6dfaf, 0.07));
   }
 
-  private drawAmbientGlow(x: number, y: number, color: number, alpha: number, radius = 130): void {
-    const glow = this.add.circle(x, y, radius, color, alpha); this.worldLayer.add(glow);
+  private drawGlow(x: number, y: number, color: number, alpha: number, radius = 130): void {
+    const glow = this.add.circle(x, y, radius, color, alpha);
+    this.worldLayer.add(glow);
     this.tweens.add({ targets: glow, alpha: alpha * 1.8, scale: 1.08, duration: 1500, yoyo: true, repeat: -1 });
   }
 
   private drawMist(x: number, y: number, width: number): void {
     for (let i = 0; i < 7; i++) {
-      const mist = this.add.ellipse(x - width / 2 + i * width / 6, y - (i % 2) * 18, 120, 42, 0xc7d9d0, 0.035);
-      this.worldLayer.add(mist);
+      this.worldLayer.add(this.add.ellipse(x - width / 2 + i * width / 6, y - (i % 2) * 18, 120, 42, 0xc7d9d0, 0.035));
     }
   }
 
