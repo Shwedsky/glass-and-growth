@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "simulate:progression": "node tools/simulate-progression.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"
