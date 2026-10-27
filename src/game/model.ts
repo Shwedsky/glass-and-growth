@@ -1,4 +1,4 @@
-import { DISCOVERY_NODES, NODE_BY_ID, type NodeId } from './content';
+import { DISCOVERY_NODES, NODE_BY_ID, type Branch, type DiscoveryNode, type NodeId } from './content';
 
 export interface GameState {
   version: 2;
@@ -12,16 +12,18 @@ export interface GameState {
 
 const SAVE_KEY = 'glass-and-growth:p2';
 
+export const BRANCH_ACTIVE_SHARE: Record<Branch, number> = {
+  water: 0.00,
+  plants: 1.00,
+  mechanisms: 0.50,
+  climate: 0.30,
+  life: 0.70,
+  synergy: 0.50,
+  final: 0.50,
+};
+
 export function createInitialState(now = Date.now()): GameState {
-  return {
-    version: 2,
-    growth: 0,
-    lifetimeGrowth: 0,
-    unlocked: [],
-    lastUpdatedAt: now,
-    completed: false,
-    activeEventsCollected: 0,
-  };
+  return { version: 2, growth: 0, lifetimeGrowth: 0, unlocked: [], lastUpdatedAt: now, completed: false, activeEventsCollected: 0 };
 }
 
 export function loadState(): GameState {
@@ -39,43 +41,27 @@ export function loadState(): GameState {
       completed: Boolean(parsed.completed),
       activeEventsCollected: Math.max(0, Math.floor(Number(parsed.activeEventsCollected) || 0)),
     };
-  } catch {
-    return createInitialState();
-  }
+  } catch { return createInitialState(); }
 }
 
 export function saveState(state: GameState): void {
   state.lastUpdatedAt = Date.now();
   localStorage.setItem(SAVE_KEY, JSON.stringify(state));
 }
-
-export function resetState(): GameState {
-  localStorage.removeItem(SAVE_KEY);
-  return createInitialState();
-}
-
-export function isUnlocked(state: GameState, id: NodeId): boolean {
-  return state.unlocked.includes(id);
-}
+export function resetState(): GameState { localStorage.removeItem(SAVE_KEY); return createInitialState(); }
+export function isUnlocked(state: GameState, id: NodeId): boolean { return state.unlocked.includes(id); }
 
 export function isRevealed(state: GameState, id: NodeId): boolean {
   const node = NODE_BY_ID[id];
   if (node.requires.length === 0) return true;
-  if (node.branch === 'synergy' || node.branch === 'final') {
-    return node.requires.every((requirement) => state.unlocked.includes(requirement));
-  }
-  return node.requires.some((requirement) => state.unlocked.includes(requirement));
+  if (node.branch === 'synergy' || node.branch === 'final') return node.requires.every((r) => state.unlocked.includes(r));
+  return node.requires.some((r) => state.unlocked.includes(r));
 }
 
 export function canBuy(state: GameState, id: NodeId): boolean {
   const node = NODE_BY_ID[id];
-  return (
-    !isUnlocked(state, id) &&
-    node.requires.every((requirement) => isUnlocked(state, requirement)) &&
-    state.growth >= node.cost
-  );
+  return !isUnlocked(state, id) && node.requires.every((r) => isUnlocked(state, r)) && state.growth >= node.cost;
 }
-
 export function buyNode(state: GameState, id: NodeId): boolean {
   if (!canBuy(state, id)) return false;
   const node = NODE_BY_ID[id];
@@ -85,57 +71,53 @@ export function buyNode(state: GameState, id: NodeId): boolean {
   return true;
 }
 
-export function canManualTap(state: GameState): boolean {
-  return !state.completed;
+function productionMultiplier(state: GameState): number {
+  return DISCOVERY_NODES.reduce((value, node) => value * (isUnlocked(state, node.id) ? node.multiplier ?? 1 : 1), 1);
+}
+function rawSplit(node: DiscoveryNode): { passive: number; active: number } {
+  const output = node.incomePerSecond ?? 0;
+  const activeShare = BRANCH_ACTIVE_SHARE[node.branch];
+  return { passive: output * (1 - activeShare), active: output * activeShare };
 }
 
-export function getIncomePerSecond(state: GameState): number {
-  const base = DISCOVERY_NODES.reduce(
-    (sum, node) => sum + (isUnlocked(state, node.id) ? node.incomePerSecond ?? 0 : 0),
-    0,
-  );
-  const multiplier = DISCOVERY_NODES.reduce(
-    (value, node) => value * (isUnlocked(state, node.id) ? node.multiplier ?? 1 : 1),
-    1,
-  );
-  return base * multiplier;
+export function getPassiveIncomePerSecond(state: GameState): number {
+  const base = DISCOVERY_NODES.reduce((sum, node) => sum + (isUnlocked(state, node.id) ? rawSplit(node).passive : 0), 0);
+  return base * productionMultiplier(state);
 }
+export function getActiveContributionPerSecond(state: GameState): number {
+  const base = DISCOVERY_NODES.reduce((sum, node) => sum + (isUnlocked(state, node.id) ? rawSplit(node).active : 0), 0);
+  return base * productionMultiplier(state);
+}
+export function getIncomePerSecond(state: GameState): number { return getPassiveIncomePerSecond(state); }
+export function canManualTap(state: GameState): boolean { return !state.completed; }
 
-/**
- * Active play is deliberately stronger than passive play while the player is engaged.
- * Before automation a tap is the bootstrap source. Afterwards each tap is worth roughly
- * half a second of the current automated economy, so its value grows with the greenhouse.
- * At ~2 taps/sec the active contribution slightly exceeds passive production.
- */
 export function getManualTapValue(state: GameState): number {
-  const passive = getIncomePerSecond(state);
-  if (passive <= 0) return 1;
-  return Math.max(1, passive * 0.55);
+  const active = getActiveContributionPerSecond(state);
+  return Math.max(1, active / 2);
 }
-
+export function getNodeSplit(node: DiscoveryNode): { passivePerSecond: number; tapPerTap: number } {
+  const split = rawSplit(node);
+  return { passivePerSecond: split.passive, tapPerTap: split.active / 2 };
+}
 export function getActiveEventReward(state: GameState): number {
-  const income = getIncomePerSecond(state);
-  return Math.max(5, Math.round(income * 5));
+  const totalCapacity = getPassiveIncomePerSecond(state) + getActiveContributionPerSecond(state);
+  return Math.max(5, Math.round(totalCapacity * 4));
 }
-
 export function grantGrowth(state: GameState, amount: number): void {
   if (amount <= 0 || !Number.isFinite(amount)) return;
   state.growth += amount;
   state.lifetimeGrowth += amount;
 }
-
 export function collectActiveEvent(state: GameState): number {
   const reward = getActiveEventReward(state);
   grantGrowth(state, reward);
   state.activeEventsCollected += 1;
   return reward;
 }
-
 export function simulate(state: GameState, deltaSeconds: number): void {
   if (deltaSeconds <= 0) return;
-  grantGrowth(state, getIncomePerSecond(state) * deltaSeconds);
+  grantGrowth(state, getPassiveIncomePerSecond(state) * deltaSeconds);
 }
-
 export function applyOfflineProgress(state: GameState, now = Date.now()): number {
   const elapsedSeconds = Math.max(0, (now - state.lastUpdatedAt) / 1000);
   const creditedSeconds = Math.min(elapsedSeconds, 20 * 60);
