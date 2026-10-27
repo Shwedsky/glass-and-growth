@@ -22,16 +22,14 @@ export class GameSceneV5 extends GameSceneV4 {
 
   constructor() {
     super();
-    // GameSceneV4 keeps renderWorld private, but the runtime method is still
-    // dispatched dynamically. Replace it on the instance so the stable V4
-    // tree/HUD logic remains intact while the world presentation advances.
     (this as unknown as { renderWorld: () => void }).renderWorld = () => this.renderProgressiveWorld();
   }
 
   preload(): void {
-    super.preload();
+    this.load.image('main-greenhouse', 'art/main-greenhouse.jpg');
+    this.load.image('heart-medallion', 'art/heart-medallion.jpg');
     for (let i = 0; i < STAGE_TEXTURES.length; i += 1) {
-      this.load.image(STAGE_TEXTURES[i], `/art/stages/stage-${i}.jpg`);
+      this.load.image(STAGE_TEXTURES[i], `art/stages/stage-${i}.jpg`);
     }
   }
 
