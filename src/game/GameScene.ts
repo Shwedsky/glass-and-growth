@@ -25,58 +25,82 @@ import {
   t,
   type Locale,
 } from '../i18n';
+import { uiText, type UiTextKey } from '../uiText';
 
 const NODE_POSITIONS: Record<NodeId, [number, number]> = {
   sprout: [0.50, 0.50],
-  pump: [0.38, 0.43],
-  gutters: [0.30, 0.34],
-  cistern: [0.20, 0.28],
-  irrigation: [0.18, 0.42],
-  filter: [0.12, 0.52],
-  pond: [0.22, 0.58],
-  bed: [0.62, 0.43],
-  flowers: [0.70, 0.34],
-  herbs: [0.80, 0.27],
-  vines: [0.81, 0.41],
+
+  pump: [0.39, 0.43],
+  gutters: [0.30, 0.35],
+  cistern: [0.19, 0.28],
+  irrigation: [0.27, 0.45],
+  filter: [0.13, 0.51],
+  pond: [0.21, 0.61],
+
+  bed: [0.61, 0.43],
+  flowers: [0.70, 0.35],
+  herbs: [0.81, 0.28],
+  vines: [0.78, 0.43],
   orchid: [0.88, 0.50],
-  canopy: [0.78, 0.58],
-  glass: [0.40, 0.61],
-  mirrors: [0.32, 0.69],
-  vents: [0.23, 0.78],
-  heater: [0.36, 0.81],
-  climate: [0.45, 0.75],
-  gears: [0.51, 0.65],
-  timer: [0.50, 0.76],
-  auto_valves: [0.50, 0.87],
-  roof_drive: [0.61, 0.79],
-  bees: [0.62, 0.60],
+  canopy: [0.79, 0.60],
+
+  glass: [0.40, 0.59],
+  mirrors: [0.31, 0.68],
+  vents: [0.21, 0.76],
+  heater: [0.35, 0.82],
+  climate: [0.44, 0.76],
+
+  gears: [0.50, 0.61],
+  timer: [0.50, 0.71],
+  auto_valves: [0.50, 0.84],
+  roof_drive: [0.60, 0.79],
+
+  bees: [0.61, 0.60],
   butterflies: [0.71, 0.68],
-  dragonflies: [0.80, 0.76],
-  birds: [0.70, 0.85],
-  pollination: [0.75, 0.50],
-  humidity: [0.29, 0.60],
+  dragonflies: [0.81, 0.76],
+  birds: [0.70, 0.84],
+
+  pollination: [0.73, 0.51],
+  humidity: [0.29, 0.59],
   ecosystem: [0.61, 0.69],
+
   central_bud: [0.50, 0.36],
   open_roof: [0.50, 0.24],
   final_bloom: [0.50, 0.13],
 };
 
 const BRANCH_COLORS: Record<Branch, number> = {
-  water: 0x70c8ef,
-  plants: 0x8fdb63,
-  climate: 0xf0bd57,
-  mechanisms: 0xd39752,
-  life: 0xd978e8,
-  synergy: 0xf3d26b,
-  final: 0xf6d7a2,
+  water: 0x65c8f2,
+  plants: 0x7ed957,
+  climate: 0xd9a947,
+  mechanisms: 0xd48842,
+  life: 0xd26ce5,
+  synergy: 0xf1d36b,
+  final: 0xffe0a7,
 };
 
-const EVENT_ANCHORS: [number, number][] = [
-  [0.17, 0.69], // pump
-  [0.16, 0.38], // rain collector
-  [0.79, 0.31], // vines
-  [0.84, 0.67], // flower bed
-  [0.50, 0.49], // central tree
+interface ActiveEventDefinition {
+  x: number;
+  y: number;
+  icon: string;
+  textKey: UiTextKey;
+  tint: number;
+}
+
+const ACTIVE_EVENTS: ActiveEventDefinition[] = [
+  { x: 0.17, y: 0.69, icon: '⚙', textKey: 'event_pump', tint: 0xd4924f },
+  { x: 0.16, y: 0.38, icon: '💧', textKey: 'event_water', tint: 0x70c8ef },
+  { x: 0.79, y: 0.31, icon: '☀', textKey: 'event_light', tint: 0xf4c75b },
+  { x: 0.84, y: 0.67, icon: '✿', textKey: 'event_flowers', tint: 0xe678bf },
+  { x: 0.75, y: 0.42, icon: '◆', textKey: 'event_bee', tint: 0xf0c84b },
+];
+
+const WORLD_LABELS: Array<{ x: number; y: number; key: UiTextKey; width: number }> = [
+  { x: 0.12, y: 0.39, key: 'object_rain', width: 210 },
+  { x: 0.11, y: 0.83, key: 'object_pump', width: 180 },
+  { x: 0.90, y: 0.77, key: 'object_flowers', width: 220 },
+  { x: 0.88, y: 0.43, key: 'object_hive', width: 170 },
+  { x: 0.85, y: 0.24, key: 'object_vines', width: 210 },
 ];
 
 export class GameScene extends Phaser.Scene {
@@ -93,6 +117,8 @@ export class GameScene extends Phaser.Scene {
   private activeEventCountdown = 8;
   private activeEvent?: Phaser.GameObjects.Container;
   private activeEventTimer?: Phaser.Time.TimerEvent;
+  private growthText?: Phaser.GameObjects.Text;
+  private stageText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('GameScene');
@@ -132,7 +158,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.uiAccumulator >= 0.20) {
       this.uiAccumulator = 0;
-      this.renderHud();
+      this.updateHudValues();
     }
     if (this.lastSaveAt >= 3) {
       this.lastSaveAt = 0;
@@ -150,22 +176,24 @@ export class GameScene extends Phaser.Scene {
       grantGrowth(this.state, amount);
       this.platform.analytics('manual_tree_tap', { amount });
       this.pulseCentralTree(pointer.x, pointer.y, amount);
-      this.renderHud();
+      this.updateHudValues();
     });
   }
 
   private isTreeTap(x: number, y: number): boolean {
     const w = this.scale.width;
     const h = this.scale.height;
-    const dx = (x - w * 0.50) / Math.max(1, w * 0.18);
-    const dy = (y - h * 0.50) / Math.max(1, h * 0.30);
+    const dx = (x - w * 0.50) / Math.max(1, w * 0.17);
+    const dy = (y - h * 0.49) / Math.max(1, h * 0.29);
     return dx * dx + dy * dy <= 1;
   }
 
   private renderAll(): void {
     this.clearActiveEvent();
+    this.tweens.killAll();
     this.worldLayer.removeAll(true);
     this.treeLayer.removeAll(true);
+    this.hudLayer.removeAll(true);
     this.renderWorld();
     this.renderTree();
     this.worldLayer.setVisible(!this.treeOpen);
@@ -180,13 +208,35 @@ export class GameScene extends Phaser.Scene {
     this.coverImage(image, w, h);
     this.worldLayer.add(image);
 
-    // The art is the scene. Code adds only interaction feedback and a subtle focus cue.
-    const focus = this.add.image(w * 0.50, h * 0.51, 'heart-medallion')
+    // Localised cards deliberately cover the baked labels in the concept art.
+    for (const label of WORLD_LABELS) {
+      const cardWidth = Math.min(label.width, w * 0.22);
+      const cardHeight = Math.max(46, Math.min(62, h * 0.085));
+      const x = label.x * w;
+      const y = label.y * h;
+      const card = this.add.image(x, y, 'hud-panel').setDisplaySize(cardWidth, cardHeight).setAlpha(0.96);
+      const text = this.add.text(x, y, uiText(this.locale, label.key), {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(12, cardHeight * 0.25)}px`, color: '#f6e2a5',
+        stroke: '#25170a', strokeThickness: 3, align: 'center', wordWrap: { width: cardWidth * 0.82 },
+      }).setOrigin(0.5);
+      this.worldLayer.add([card, text]);
+    }
+
+    const hintWidth = Math.min(430, w * 0.40);
+    const hintHeight = Math.max(58, Math.min(76, h * 0.10));
+    const hintPanel = this.add.image(w * 0.50, h * 0.76, 'hud-panel').setDisplaySize(hintWidth, hintHeight).setAlpha(0.97);
+    const hintText = this.add.text(w * 0.50, h * 0.76, uiText(this.locale, 'tap_tree_hint'), {
+      fontFamily: 'Georgia, serif', fontSize: `${Math.max(14, hintHeight * 0.23)}px`, color: '#f5dfa0',
+      stroke: '#2b190b', strokeThickness: 3, align: 'center', wordWrap: { width: hintWidth * 0.78 },
+    }).setOrigin(0.5);
+    this.worldLayer.add([hintPanel, hintText]);
+
+    const focus = this.add.image(w * 0.50, h * 0.50, 'heart-medallion')
       .setDisplaySize(Math.min(w, h) * 0.15, Math.min(w, h) * 0.15)
-      .setAlpha(0.17)
+      .setAlpha(0.12)
       .setBlendMode(Phaser.BlendModes.ADD);
     this.worldLayer.add(focus);
-    this.tweens.add({ targets: focus, alpha: 0.27, scale: 1.08, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    this.tweens.add({ targets: focus, alpha: 0.23, scale: 1.08, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
 
   private renderTree(): void {
@@ -196,17 +246,19 @@ export class GameScene extends Phaser.Scene {
 
     const bg = this.add.image(w / 2, h / 2, 'main-greenhouse');
     this.coverImage(bg, w, h);
-    bg.setTint(0x424a3b).setAlpha(0.42);
-    this.treeLayer.add(bg);
+    bg.setTint(0x364337).setAlpha(0.38);
+    const shade = this.add.rectangle(w / 2, h / 2, w, h, 0x07100b, 0.70);
+    this.treeLayer.add([bg, shade]);
 
-    const shade = this.add.rectangle(w / 2, h / 2, w, h, 0x07100b, 0.58);
-    this.treeLayer.add(shade);
-
-    const title = this.add.text(w / 2, 26, t(this.locale, 'tree_title'), {
-      fontFamily: 'Georgia, serif', fontSize: `${Math.max(28, Math.min(46, w / 28))}px`, color: '#f7df9a',
+    const title = this.add.text(w / 2, 18, t(this.locale, 'tree_title'), {
+      fontFamily: 'Georgia, serif', fontSize: `${Math.max(27, Math.min(44, w / 29))}px`, color: '#f7df9a',
       stroke: '#321f0e', strokeThickness: 5,
     }).setOrigin(0.5, 0);
-    this.treeLayer.add(title);
+    const help = this.add.text(w / 2, 68, uiText(this.locale, 'tree_help_radial'), {
+      fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(11, Math.min(14, w / 100))}px`, color: '#e9dfc4',
+      align: 'center', wordWrap: { width: w * 0.60 },
+    }).setOrigin(0.5, 0);
+    this.treeLayer.add([title, help]);
 
     const positions = new Map<NodeId, Phaser.Math.Vector2>();
     for (const node of DISCOVERY_NODES) {
@@ -219,14 +271,24 @@ export class GameScene extends Phaser.Scene {
       const childVisible = isRevealed(this.state, node.id) || isUnlocked(this.state, node.id);
       if (!childVisible) continue;
       const child = positions.get(node.id)!;
+      const childAvailable = node.requires.every((req) => isUnlocked(this.state, req));
+
       for (const req of node.requires) {
+        const parentNode = NODE_BY_ID[req];
         const parent = positions.get(req)!;
-        links.lineStyle(isUnlocked(this.state, node.id) ? 3 : 2, BRANCH_COLORS[node.branch], isUnlocked(this.state, node.id) ? 0.70 : 0.28);
+        const crossBranch = parentNode.branch !== node.branch;
+        if (crossBranch && !childAvailable && !isUnlocked(this.state, node.id)) continue;
+
+        const alpha = isUnlocked(this.state, node.id) ? 0.82 : childAvailable ? 0.58 : 0.20;
+        const thickness = crossBranch ? 1.5 : isUnlocked(this.state, node.id) ? 3.5 : 2.5;
+        links.lineStyle(thickness, BRANCH_COLORS[node.branch], alpha);
         links.beginPath();
         links.moveTo(parent.x, parent.y);
-        const mx = (parent.x + child.x) / 2;
-        const my = (parent.y + child.y) / 2;
-        links.lineTo(mx, my);
+        if (crossBranch) {
+          const mx = parent.x + (child.x - parent.x) * 0.52;
+          links.lineTo(mx, parent.y);
+          links.lineTo(mx, child.y);
+        }
         links.lineTo(child.x, child.y);
         links.strokePath();
       }
@@ -240,23 +302,30 @@ export class GameScene extends Phaser.Scene {
       const available = node.requires.every((req) => isUnlocked(this.state, req));
       const affordable = this.state.growth >= node.cost;
       const selected = this.selectedNode === node.id;
-      const size = node.id === 'sprout' ? Math.max(72, minSide * 0.13) : Math.max(42, minSide * 0.072);
+      const size = node.id === 'sprout' ? Math.max(76, minSide * 0.125) : Math.max(42, minSide * 0.066);
 
+      const tint = unlocked ? 0x6fc85e : available ? 0xf1c75e : revealed ? 0x8d8c81 : 0x4f544e;
+      const alpha = unlocked ? 1 : available ? 1 : revealed ? 0.78 : 0.42;
       const medallion = this.add.image(p.x, p.y, node.id === 'sprout' ? 'heart-medallion' : 'node-medallion')
         .setDisplaySize(size, size)
-        .setTint(unlocked ? BRANCH_COLORS[node.branch] : available ? 0xd6b865 : 0x777b70)
-        .setAlpha(unlocked ? 1 : revealed ? 0.92 : 0.50)
+        .setTint(tint)
+        .setAlpha(alpha)
         .setInteractive({ useHandCursor: true });
-      if (selected) medallion.setScale(1.12);
       this.treeLayer.add(medallion);
 
-      const glyph = this.add.text(p.x, p.y, unlocked ? '✓' : '?', {
-        fontFamily: 'Georgia, serif',
-        fontSize: `${Math.max(15, size * 0.28)}px`,
-        color: unlocked ? '#f8efcc' : '#ead9ad',
+      if (selected) {
+        const ring = this.add.circle(p.x, p.y, size * 0.57, 0x000000, 0)
+          .setStrokeStyle(Math.max(3, size * 0.05), 0xffe49a, 0.95);
+        this.treeLayer.add(ring);
+      }
+
+      const glyph = unlocked ? '✓' : available ? '✦' : revealed ? '▣' : '?';
+      const glyphText = this.add.text(p.x, p.y, glyph, {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(15, size * 0.30)}px`,
+        color: unlocked ? '#efffcf' : available ? '#fff0a5' : '#e0d9c3',
         stroke: '#24170b', strokeThickness: 3,
-      }).setOrigin(0.5).setAlpha(node.id === 'sprout' && !unlocked ? 0.72 : 1);
-      this.treeLayer.add(glyph);
+      }).setOrigin(0.5);
+      this.treeLayer.add(glyphText);
 
       medallion.on('pointerdown', (_pointer: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
         event.stopPropagation();
@@ -264,15 +333,37 @@ export class GameScene extends Phaser.Scene {
         this.renderTreeOnly();
       });
 
-      if (affordable && available && !unlocked) {
-        this.tweens.add({ targets: medallion, alpha: 0.62, duration: 700, yoyo: true, repeat: -1 });
+      if (available && !unlocked) {
+        this.tweens.add({ targets: medallion, alpha: affordable ? 0.68 : 0.78, scale: affordable ? 1.10 : 1.04, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       }
     }
 
+    this.renderBranchLabels();
     this.renderSelectedNodePanel();
   }
 
+  private renderBranchLabels(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const labels: Array<{ x: number; y: number; key: 'branch_water' | 'branch_plants' | 'branch_climate' | 'branch_mechanisms' | 'branch_life'; branch: Branch }> = [
+      { x: 0.24, y: 0.19, key: 'branch_water', branch: 'water' },
+      { x: 0.76, y: 0.19, key: 'branch_plants', branch: 'plants' },
+      { x: 0.24, y: 0.88, key: 'branch_climate', branch: 'climate' },
+      { x: 0.50, y: 0.93, key: 'branch_mechanisms', branch: 'mechanisms' },
+      { x: 0.76, y: 0.88, key: 'branch_life', branch: 'life' },
+    ];
+    for (const label of labels) {
+      const text = this.add.text(label.x * w, label.y * h, t(this.locale, label.key), {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(12, Math.min(16, w / 90))}px`,
+        color: '#fff1bf', backgroundColor: '#0b1711dd', padding: { x: 9, y: 5 },
+        stroke: Phaser.Display.Color.IntegerToColor(BRANCH_COLORS[label.branch]).rgba, strokeThickness: 1,
+      }).setOrigin(0.5);
+      this.treeLayer.add(text);
+    }
+  }
+
   private renderTreeOnly(): void {
+    this.tweens.killAll();
     this.treeLayer.removeAll(true);
     this.renderTree();
     this.treeLayer.setVisible(true);
@@ -288,47 +379,64 @@ export class GameScene extends Phaser.Scene {
     const available = node.requires.every((req) => isUnlocked(this.state, req));
     const affordable = this.state.growth >= node.cost;
 
-    const panelW = Math.min(440, w * 0.38);
-    const panelH = Math.min(150, h * 0.21);
-    const panelX = w - panelW / 2 - 18;
+    const panelW = Math.min(520, w * 0.42);
+    const panelH = Math.min(175, h * 0.23);
+    const panelX = w - panelW / 2 - 20;
     const panelY = h - panelH / 2 - 18;
-
-    const panel = this.add.image(panelX, panelY, 'hud-panel').setDisplaySize(panelW, panelH).setAlpha(0.96);
+    const panel = this.add.image(panelX, panelY, 'hud-panel').setDisplaySize(panelW, panelH).setAlpha(0.98);
     this.treeLayer.add(panel);
 
-    const title = this.add.text(panelX - panelW * 0.43, panelY - panelH * 0.34,
-      unlocked ? t(this.locale, nodeNameKey(node.id)) : revealed ? this.unknownLabel() : '???', {
-        fontFamily: 'Georgia, serif', fontSize: `${Math.max(15, panelH * 0.14)}px`, color: '#f5df9d', fontStyle: 'bold',
-        stroke: '#25180d', strokeThickness: 3,
-      }).setOrigin(0, 0);
+    const statusKey: UiTextKey = unlocked ? 'node_opened' : available ? 'node_available' : revealed ? 'node_locked' : 'node_mystery';
+    const statusColor = unlocked ? '#a9f58f' : available ? '#ffe080' : revealed ? '#c8c2ad' : '#9a998f';
+    const status = this.add.text(panelX - panelW * 0.43, panelY - panelH * 0.36, uiText(this.locale, statusKey), {
+      fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(10, panelH * 0.085)}px`, color: statusColor,
+      fontStyle: 'bold', letterSpacing: 1,
+    }).setOrigin(0, 0);
+    this.treeLayer.add(status);
+
+    const titleText = unlocked ? t(this.locale, nodeNameKey(node.id)) : revealed ? this.unknownLabel() : '???';
+    const title = this.add.text(panelX - panelW * 0.43, panelY - panelH * 0.18, titleText, {
+      fontFamily: 'Georgia, serif', fontSize: `${Math.max(16, panelH * 0.14)}px`, color: '#f5df9d', fontStyle: 'bold',
+      stroke: '#25180d', strokeThickness: 3, wordWrap: { width: panelW * 0.58 },
+    }).setOrigin(0, 0);
     this.treeLayer.add(title);
 
     const desc = unlocked
       ? t(this.locale, nodeDescriptionKey(node.id))
-      : revealed
+      : available
         ? `${this.costLabel()}: ${this.formatNumber(node.cost)}`
-        : this.mysteryLabel();
-    const description = this.add.text(panelX - panelW * 0.43, panelY - panelH * 0.06, desc, {
-      fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(11, panelH * 0.09)}px`, color: '#efe9d8',
-      wordWrap: { width: panelW * 0.58 }, lineSpacing: 4,
+        : revealed
+          ? uiText(this.locale, 'need_requirements')
+          : this.mysteryLabel();
+    const description = this.add.text(panelX - panelW * 0.43, panelY + panelH * 0.10, desc, {
+      fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(11, panelH * 0.085)}px`, color: '#efe9d8',
+      wordWrap: { width: panelW * 0.57 }, lineSpacing: 3,
     }).setOrigin(0, 0);
     this.treeLayer.add(description);
 
-    if (!unlocked && revealed) {
-      const buttonX = panelX + panelW * 0.31;
-      const buttonY = panelY + panelH * 0.14;
-      const button = this.add.image(buttonX, buttonY, 'node-medallion').setDisplaySize(panelH * 0.58, panelH * 0.58)
-        .setTint(available && affordable ? 0x9bc76a : 0x756d5b)
-        .setInteractive({ useHandCursor: available && affordable });
-      const buttonText = this.add.text(buttonX, buttonY, this.unlockLabel(), {
-        fontFamily: 'Georgia, serif', fontSize: `${Math.max(10, panelH * 0.085)}px`, color: '#fff2c4', align: 'center',
-        stroke: '#26180b', strokeThickness: 3, wordWrap: { width: panelH * 0.48 },
-      }).setOrigin(0.5);
-      this.treeLayer.add([button, buttonText]);
+    const buttonW = panelW * 0.30;
+    const buttonH = panelH * 0.40;
+    const buttonX = panelX + panelW * 0.29;
+    const buttonY = panelY + panelH * 0.15;
+    const button = this.add.image(buttonX, buttonY, 'hud-panel')
+      .setDisplaySize(buttonW, buttonH)
+      .setTint(unlocked ? 0x557f50 : available && affordable ? 0x6fac55 : 0x5d5a50)
+      .setAlpha(unlocked || available ? 1 : 0.70)
+      .setInteractive({ useHandCursor: available && affordable && !unlocked });
+    const buttonLabel = unlocked
+      ? uiText(this.locale, 'node_opened')
+      : available
+        ? uiText(this.locale, 'open_for', { value: this.formatNumber(node.cost) })
+        : uiText(this.locale, 'node_locked');
+    const buttonText = this.add.text(buttonX, buttonY, buttonLabel, {
+      fontFamily: 'Georgia, serif', fontSize: `${Math.max(11, buttonH * 0.22)}px`, color: '#fff3c6',
+      align: 'center', stroke: '#28180b', strokeThickness: 3, wordWrap: { width: buttonW * 0.82 },
+    }).setOrigin(0.5);
+    this.treeLayer.add([button, buttonText]);
 
+    if (!unlocked && available) {
       button.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
         event.stopPropagation();
-        if (!available) return;
         if (!affordable) {
           this.showToast(t(this.locale, 'need_more', { value: this.formatNumber(node.cost - this.state.growth) }));
           return;
@@ -337,11 +445,12 @@ export class GameScene extends Phaser.Scene {
           saveState(this.state);
           this.platform.analytics('discovery_unlocked', { node: node.id });
           if (node.final) void this.platform.achievement('final_bloom');
+          this.showToast(node.final ? t(this.locale, 'ending_toast') : t(this.locale, nodeNameKey(node.id)));
           this.renderAll();
           this.treeOpen = true;
           this.worldLayer.setVisible(false);
           this.treeLayer.setVisible(true);
-          this.showToast(node.final ? t(this.locale, 'ending_toast') : t(this.locale, nodeNameKey(node.id)));
+          this.renderHud();
         }
       });
     }
@@ -351,26 +460,29 @@ export class GameScene extends Phaser.Scene {
     this.hudLayer.removeAll(true);
     const w = this.scale.width;
     const h = this.scale.height;
+    this.growthText = undefined;
+    this.stageText = undefined;
 
     if (!this.treeOpen) {
-      const panelW = Math.min(360, w * 0.33);
-      const panelH = Math.min(130, h * 0.19);
-      const panel = this.add.image(panelW / 2 + 14, panelH / 2 + 12, 'hud-panel').setDisplaySize(panelW, panelH).setAlpha(0.97);
-      const mask = this.add.graphics();
-      mask.fillStyle(0x0a1510, 0.90);
-      mask.fillRoundedRect(34, 26, panelW - 55, panelH - 45, 16);
-      const income = getIncomePerSecond(this.state);
-      const tap = getManualTapValue(this.state);
-      const text = this.add.text(48, 32,
-        `${t(this.locale, 'growth')}  ${this.formatNumber(this.state.growth)}\n+${this.formatNumber(income)}${t(this.locale, 'per_second')}   •   ${t(this.locale, 'tap')} +${this.formatNumber(tap)}`, {
-          fontFamily: 'Georgia, serif', fontSize: `${Math.max(15, panelH * 0.16)}px`, color: '#f8e9b9', lineSpacing: 8,
-          stroke: '#1d1309', strokeThickness: 2,
-        });
-      this.hudLayer.add([panel, mask, text]);
+      const panelW = Math.min(360, w * 0.32);
+      const panelH = Math.min(130, h * 0.18);
+      const panel = this.add.image(panelW / 2 + 14, panelH / 2 + 12, 'hud-panel').setDisplaySize(panelW, panelH).setAlpha(0.98);
+      const dark = this.add.rectangle(panelW / 2 + 14, panelH / 2 + 12, panelW * 0.82, panelH * 0.58, 0x08140f, 0.84);
+      this.growthText = this.add.text(42, 31, '', {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(15, panelH * 0.16)}px`, color: '#f8e9b9', lineSpacing: 7,
+        stroke: '#1d1309', strokeThickness: 2,
+      });
+      this.hudLayer.add([panel, dark, this.growthText]);
 
-      const discoverHit = this.add.rectangle(w * 0.875, h * 0.075, Math.max(160, w * 0.17), Math.max(55, h * 0.10), 0xffffff, 0.001)
-        .setInteractive({ useHandCursor: true });
-      discoverHit.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+      const menuW = Math.max(180, Math.min(250, w * 0.20));
+      const menuH = Math.max(58, Math.min(76, h * 0.10));
+      const menu = this.add.image(w - menuW / 2 - 18, menuH / 2 + 16, 'hud-panel')
+        .setDisplaySize(menuW, menuH).setAlpha(0.98).setInteractive({ useHandCursor: true });
+      const menuText = this.add.text(w - menuW / 2 - 18, menuH / 2 + 16, `✦  ${t(this.locale, 'discoveries')}`, {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(15, menuH * 0.25)}px`, color: '#f8e3a3',
+        stroke: '#27170a', strokeThickness: 3,
+      }).setOrigin(0.5);
+      menu.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
         event.stopPropagation();
         this.treeOpen = true;
         this.clearActiveEvent();
@@ -378,11 +490,15 @@ export class GameScene extends Phaser.Scene {
         this.treeLayer.setVisible(true);
         this.renderHud();
       });
-      this.hudLayer.add(discoverHit);
+      this.hudLayer.add([menu, menuText]);
     } else {
-      const back = this.add.image(w - 110, 48, 'hud-panel').setDisplaySize(190, 64).setAlpha(0.95).setInteractive({ useHandCursor: true });
-      const backText = this.add.text(w - 110, 48, t(this.locale, 'back'), {
-        fontFamily: 'Georgia, serif', fontSize: '15px', color: '#f5dfa2', stroke: '#24170b', strokeThickness: 3,
+      const backW = Math.max(190, Math.min(270, w * 0.21));
+      const backH = Math.max(58, Math.min(72, h * 0.095));
+      const back = this.add.image(w - backW / 2 - 18, backH / 2 + 14, 'hud-panel')
+        .setDisplaySize(backW, backH).setAlpha(0.98).setInteractive({ useHandCursor: true });
+      const backText = this.add.text(w - backW / 2 - 18, backH / 2 + 14, `←  ${t(this.locale, 'back')}`, {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(14, backH * 0.23)}px`, color: '#f5dfa2',
+        stroke: '#24170b', strokeThickness: 3,
       }).setOrigin(0.5);
       back.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
         event.stopPropagation();
@@ -392,10 +508,15 @@ export class GameScene extends Phaser.Scene {
         this.renderHud();
       });
       this.hudLayer.add([back, backText]);
+
+      this.stageText = this.add.text(20, 18, '', {
+        fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f5dfa2', backgroundColor: '#0c1812dd', padding: { x: 12, y: 7 },
+      });
+      this.hudLayer.add(this.stageText);
     }
 
     const language = this.add.text(w - 20, h - 18, t(this.locale, 'language'), {
-      fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f0d899', backgroundColor: '#132219cc', padding: { x: 12, y: 7 },
+      fontFamily: 'Georgia, serif', fontSize: '14px', color: '#f0d899', backgroundColor: '#132219ee', padding: { x: 13, y: 8 },
     }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
     language.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
@@ -404,8 +525,8 @@ export class GameScene extends Phaser.Scene {
       this.renderAll();
     });
 
-    const reset = this.add.text(20, h - 18, t(this.locale, 'reset'), {
-      fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#d8cda9', backgroundColor: '#132219aa', padding: { x: 10, y: 6 },
+    const reset = this.add.text(18, h - 18, t(this.locale, 'reset'), {
+      fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#d8cda9', backgroundColor: '#132219cc', padding: { x: 10, y: 6 },
     }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
     reset.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
@@ -417,12 +538,24 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.hudLayer.add([language, reset]);
+    this.updateHudValues();
+  }
+
+  private updateHudValues(): void {
+    if (this.growthText) {
+      const income = getIncomePerSecond(this.state);
+      const tap = getManualTapValue(this.state);
+      this.growthText.setText(
+        `${t(this.locale, 'growth')}  ${this.formatNumber(this.state.growth)}\n+${this.formatNumber(income)}${t(this.locale, 'per_second')}   •   ${t(this.locale, 'tap')} +${this.formatNumber(tap)}`,
+      );
+    }
+    if (this.stageText) this.stageText.setText(t(this.locale, 'stage', { value: this.state.unlocked.length }));
   }
 
   private pulseCentralTree(x: number, y: number, amount: number): void {
     const pulse = this.add.image(this.scale.width * 0.50, this.scale.height * 0.50, 'heart-medallion')
       .setDisplaySize(Math.min(this.scale.width, this.scale.height) * 0.18, Math.min(this.scale.width, this.scale.height) * 0.18)
-      .setAlpha(0.26).setBlendMode(Phaser.BlendModes.ADD).setDepth(950);
+      .setAlpha(0.28).setBlendMode(Phaser.BlendModes.ADD).setDepth(950);
     const reward = this.add.text(x, y - 20, `+${this.formatNumber(amount)}`, {
       fontFamily: 'Georgia, serif', fontSize: '22px', color: '#efffbc', fontStyle: 'bold', stroke: '#284318', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(1100);
@@ -432,28 +565,44 @@ export class GameScene extends Phaser.Scene {
 
   private spawnActiveEvent(): void {
     if (this.treeOpen || this.state.completed) return;
-    const [nx, ny] = Phaser.Utils.Array.GetRandom(EVENT_ANCHORS);
-    const x = nx * this.scale.width;
-    const y = ny * this.scale.height;
-    const size = Math.max(54, Math.min(this.scale.width, this.scale.height) * 0.085);
+    const definition = Phaser.Utils.Array.GetRandom(ACTIVE_EVENTS);
+    const x = definition.x * this.scale.width;
+    const y = definition.y * this.scale.height;
+    const size = Math.max(60, Math.min(this.scale.width, this.scale.height) * 0.09);
     const container = this.add.container(x, y).setDepth(900);
-    const medallion = this.add.image(0, 0, 'node-medallion').setDisplaySize(size, size).setTint(0xffd56b).setInteractive({ useHandCursor: true });
-    const mark = this.add.text(0, 0, '!', { fontFamily: 'Georgia, serif', fontSize: `${size * 0.38}px`, color: '#fff2b1', stroke: '#4b2605', strokeThickness: 4 }).setOrigin(0.5);
-    container.add([medallion, mark]);
+
+    const medallion = this.add.image(0, 0, 'node-medallion').setDisplaySize(size, size)
+      .setTint(definition.tint).setInteractive({ useHandCursor: true });
+    const icon = this.add.text(0, -2, definition.icon, {
+      fontFamily: 'Segoe UI Symbol, system-ui, sans-serif', fontSize: `${size * 0.34}px`, color: '#fff5c9',
+      stroke: '#3c230d', strokeThickness: 4,
+    }).setOrigin(0.5);
+    const tag = this.add.image(0, size * 0.72, 'hud-panel').setDisplaySize(Math.max(150, size * 2.5), 54).setAlpha(0.98);
+    const tagText = this.add.text(0, size * 0.72,
+      `${uiText(this.locale, 'event_hint')}\n${uiText(this.locale, definition.textKey)}`, {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(10, size * 0.15)}px`, color: '#fff0b4', align: 'center',
+        stroke: '#2b1909', strokeThickness: 2, lineSpacing: 1,
+      }).setOrigin(0.5);
+    container.add([tag, medallion, icon, tagText]);
+
     const collect = (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       if (!this.activeEvent) return;
       const reward = collectActiveEvent(this.state);
-      this.platform.analytics('active_event_collected', { reward });
+      this.platform.analytics('active_event_collected', { reward, type: definition.textKey });
+      this.showToast(`${uiText(this.locale, definition.textKey)}: +${this.formatNumber(reward)}`);
       this.pulseCentralTree(x, y, reward);
       this.clearActiveEvent();
       this.activeEventCountdown = Phaser.Math.Between(9, 15);
-      this.renderHud();
+      this.updateHudValues();
     };
     medallion.on('pointerdown', collect);
-    this.tweens.add({ targets: medallion, scale: 1.12, duration: 720, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    tag.setInteractive({ useHandCursor: true }).on('pointerdown', collect);
+    this.tweens.add({ targets: medallion, scale: 1.13, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    this.tweens.add({ targets: tag, alpha: 0.78, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+
     this.activeEvent = container;
-    this.activeEventTimer = this.time.delayedCall(6500, () => {
+    this.activeEventTimer = this.time.delayedCall(7500, () => {
       this.clearActiveEvent();
       this.activeEventCountdown = Phaser.Math.Between(7, 13);
     });
@@ -469,8 +618,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showToast(message: string): void {
-    const toast = this.add.text(this.scale.width / 2, 86, message, {
-      fontFamily: 'Georgia, serif', fontSize: '16px', color: '#fff0b4', backgroundColor: '#152119e8', padding: { x: 18, y: 10 },
+    const toast = this.add.text(this.scale.width / 2, 92, message, {
+      fontFamily: 'Georgia, serif', fontSize: '16px', color: '#fff0b4', backgroundColor: '#152119ee', padding: { x: 18, y: 10 },
       stroke: '#24160b', strokeThickness: 2, wordWrap: { width: Math.max(300, this.scale.width * 0.68) }, align: 'center',
     }).setOrigin(0.5).setDepth(2000).setAlpha(0);
     this.tweens.add({ targets: toast, alpha: 1, duration: 150, hold: 1300, yoyo: true, onComplete: () => toast.destroy() });
@@ -494,16 +643,12 @@ export class GameScene extends Phaser.Scene {
     return this.locale === 'ru' ? 'Стоимость' : 'Cost';
   }
 
-  private unlockLabel(): string {
-    return this.locale === 'ru' ? 'Открыть' : 'Unlock';
-  }
-
   private formatNumber(value: number): string {
-    const abs = Math.abs(value);
-    if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
-    if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-    if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-    if (abs >= 10) return Math.floor(value).toString();
-    return value.toFixed(abs < 1 ? 2 : 1);
+    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    if (value >= 100) return Math.floor(value).toString();
+    if (value >= 10) return value.toFixed(1);
+    return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
   }
 }
