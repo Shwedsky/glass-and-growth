@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import './phaserCompat';
 import './styles.css';
 import { GameSceneCozy } from './game/GameSceneCozy';
 
