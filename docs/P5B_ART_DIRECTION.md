@@ -1,6 +1,6 @@
 # P5B — Animated Illustration
 
-Status: implementation proof in progress.
+Status: implementation proof ready for owner visual test.
 
 ## Product rule
 
@@ -13,17 +13,24 @@ Release-world restrictions:
 - no transparent next-stage ghost tree overlays;
 - no text labels pretending a helper exists visually.
 
-## Current proof
+## Implemented proof
 
-The runtime uses the authored greenhouse frame itself as the source for local motion:
-- central tree area responds physically to taps using a masked copy of the same frame;
-- restored water region drifts subtly using same-frame masked projections;
-- foliage and flower regions sway very slightly without introducing foreign art;
-- restored glass adds restrained warm light movement;
-- late-life states use tiny painterly-scale moving life motes rather than cartoon bees;
-- helper text from P4 is removed from the world until a production-quality authored character exists.
+The runtime now uses the authored greenhouse frame itself as the source for local motion:
+- the central tree is re-projected from the **same current frame** through a local mask and reacts physically to taps;
+- tap response sends restrained warm sap/light pulses upward through the tree;
+- restored water uses two tiny-offset same-frame projections inside the real water/pump region;
+- foliage and flower regions sway by only a few pixels using the same-frame source;
+- restored glass gets subtle moving warm beams rather than a foreign light sprite;
+- late-life states use tiny painterly-scale moving motes rather than cartoon bee/butterfly sprites;
+- P4 placeholder helper labels are removed from the world until a production-quality authored character exists;
+- no next-stage raster is ever overlaid transparently on the current tree.
 
-Major progression may still switch between authored full greenhouse states, but local animation never blends a transparent next-stage tree over the current scene.
+Major progression can still switch between authored full greenhouse states. Local animation stays inside the current authored state and therefore keeps one art language.
+
+## Test controls
+
+Normal Windows launcher starts the player build.
+DEV launcher opens `?dev=1` with RESET / +1B / FINISH controls.
 
 ## Acceptance test
 
