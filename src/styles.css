@@ -5,7 +5,10 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #101814;
+}
+
+html {
+  background: #07100b;
 }
 
 body {
@@ -13,10 +16,47 @@ body {
   touch-action: manipulation;
   overscroll-behavior: none;
   user-select: none;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(62, 92, 69, 0.22), transparent 46%),
+    radial-gradient(circle at 18% 12%, rgba(167, 128, 69, 0.08), transparent 26%),
+    linear-gradient(180deg, #0a140f 0%, #07100b 60%, #050906 100%);
+}
+
+#app {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(109, 143, 119, 0.07), transparent 48%),
+    linear-gradient(180deg, rgba(18, 32, 24, 0.72), rgba(8, 14, 10, 0.95));
+}
+
+#app::before,
+#app::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#app::before {
+  z-index: 20;
+  box-shadow:
+    inset 0 0 90px rgba(0, 0, 0, 0.52),
+    inset 0 0 220px rgba(0, 0, 0, 0.25);
+}
+
+#app::after {
+  z-index: 21;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(112deg, transparent 0 36%, rgba(226, 241, 232, 0.06) 37%, transparent 39%),
+    linear-gradient(68deg, transparent 0 63%, rgba(240, 220, 166, 0.035) 64%, transparent 66%);
+  mix-blend-mode: screen;
 }
 
 canvas {
   display: block;
   width: 100%;
   height: 100%;
+  outline: none;
 }
