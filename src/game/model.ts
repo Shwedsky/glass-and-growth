@@ -103,14 +103,22 @@ export function getActiveContributionPerSecond(state: GameState): number {
 export function getIncomePerSecond(state: GameState): number { return getPassiveIncomePerSecond(state); }
 export function canManualTap(state: GameState): boolean { return !state.completed; }
 
+/**
+ * A manual tap always keeps its original +1 identity and talents add on top of it.
+ * This makes the node cards mathematically honest: a displayed +0.57 really raises
+ * the current tap by 0.57 instead of merely replacing part of a hidden minimum floor.
+ */
 export function getManualTapValue(state: GameState): number {
-  const active = getActiveContributionPerSecond(state);
-  return Math.max(1, active / 2);
+  return 1 + getActiveContributionPerSecond(state) / 2;
 }
 
 export function getNodeSplit(node: DiscoveryNode): { passivePerSecond: number; tapPerTap: number } {
   const split = rawSplit(node);
-  return { passivePerSecond: split.passive, tapPerTap: split.active / 2 };
+  const bonus = getGenerationBonuses();
+  return {
+    passivePerSecond: split.passive * bonus.passiveMultiplier,
+    tapPerTap: (split.active / 2) * bonus.tapMultiplier,
+  };
 }
 
 export function getActiveEventReward(state: GameState): number {
