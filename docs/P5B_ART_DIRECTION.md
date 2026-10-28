@@ -22,7 +22,7 @@ The runtime now uses the authored greenhouse frame itself as the source for loca
 - foliage and flower regions sway by only a few pixels using the same-frame source;
 - restored glass gets subtle moving warm beams rather than a foreign light sprite;
 - late-life states use tiny painterly-scale moving motes rather than cartoon bee/butterfly sprites;
-- P4 placeholder helper labels are removed from the world until a production-quality authored character exists;
+- P4 placeholder helper labels are stripped from the visible world until a production-quality authored character exists;
 - no next-stage raster is ever overlaid transparently on the current tree.
 
 Major progression can still switch between authored full greenhouse states. Local animation stays inside the current authored state and therefore keeps one art language.
