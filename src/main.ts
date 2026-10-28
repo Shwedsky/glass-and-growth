@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import './styles.css';
-import { GameSceneV7 } from './game/GameSceneV7';
+import { GameSceneP4 } from './game/GameSceneP4';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -8,7 +8,7 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#080d09',
   width: 1280,
   height: 720,
-  scene: [GameSceneV7],
+  scene: [GameSceneP4],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
