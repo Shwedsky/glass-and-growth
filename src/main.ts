@@ -1,9 +1,6 @@
 import Phaser from 'phaser';
 import './styles.css';
-import { GameSceneP4 } from './game/GameSceneP4';
-import { installDevHarness } from './devHarness';
-
-installDevHarness();
+import { GameSceneP5 } from './game/GameSceneP5';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -11,7 +8,7 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#080d09',
   width: 1280,
   height: 720,
-  scene: [GameSceneP4],
+  scene: [GameSceneP5],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
