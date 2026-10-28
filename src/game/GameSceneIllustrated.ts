@@ -119,8 +119,6 @@ export class GameSceneIllustrated extends GameSceneP4 {
     const root = this.add.container(0, 0).setDepth(110);
     this.illustrationRoot = root;
 
-    // Tree: exact pixels from the SAME authored frame. At rest it is visually
-    // indistinguishable from the background; taps only add a few pixels of motion.
     this.treeMotion = this.makeAlignedImage(texture, w, h, 0.58);
     this.treeMotion.setDepth(120);
     const treeMask = this.add.graphics().setDepth(119);
@@ -131,8 +129,6 @@ export class GameSceneIllustrated extends GameSceneP4 {
     this.treeMotionMask = treeMask;
     root.add(this.treeMotion);
 
-    // Water: two low-alpha re-projections of the exact water/pump portion of the
-    // painting. Their tiny independent drift reads as flowing painterly water.
     if (isUnlocked(state, 'pump')) {
       for (let i = 0; i < 2; i += 1) {
         const water = this.makeAlignedImage(texture, w, h, i === 0 ? 0.24 : 0.13);
@@ -145,19 +141,10 @@ export class GameSceneIllustrated extends GameSceneP4 {
         this.waterLayers.push(water);
         this.waterMasks.push(mask);
         root.add(water);
-        this.tweens.add({
-          targets: water,
-          y: water.y + (i === 0 ? 4 : -3),
-          x: water.x + (i === 0 ? 1.5 : -1.5),
-          duration: i === 0 ? 1250 : 1780,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.inOut',
-        });
+        this.tweens.add({ targets: water, y: water.y + (i === 0 ? 4 : -3), x: water.x + (i === 0 ? 1.5 : -1.5), duration: i === 0 ? 1250 : 1780, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       }
     }
 
-    // Foliage: subtle painterly sway made from the same frame, not from sprites.
     if (stage >= 2 || isUnlocked(state, 'flowers')) {
       const regions = [
         { x: 0.50, y: 0.34, rw: 0.32, rh: 0.31, dx: 2.2, angle: 0.08 },
@@ -174,15 +161,7 @@ export class GameSceneIllustrated extends GameSceneP4 {
         this.foliageLayers.push(foliage);
         this.foliageMasks.push(mask);
         root.add(foliage);
-        this.tweens.add({
-          targets: foliage,
-          x: foliage.x + region.dx,
-          angle: region.angle,
-          duration: 2700 + index * 520,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.inOut',
-        });
+        this.tweens.add({ targets: foliage, x: foliage.x + region.dx, angle: region.angle, duration: 2700 + index * 520, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       });
     }
 
@@ -215,10 +194,8 @@ export class GameSceneIllustrated extends GameSceneP4 {
   }
 
   private addPainterlyLight(root: Phaser.GameObjects.Container, w: number, h: number): void {
-    const beamA = this.add.rectangle(w * 0.69, h * 0.28, w * 0.055, h * 0.74, 0xffe9ae, 0.028)
-      .setAngle(19).setBlendMode(Phaser.BlendModes.ADD).setDepth(135);
-    const beamB = this.add.rectangle(w * 0.60, h * 0.31, w * 0.032, h * 0.66, 0xfff0c2, 0.020)
-      .setAngle(17).setBlendMode(Phaser.BlendModes.ADD).setDepth(135);
+    const beamA = this.add.rectangle(w * 0.69, h * 0.28, w * 0.055, h * 0.74, 0xffe9ae, 0.028).setAngle(19).setBlendMode(Phaser.BlendModes.ADD).setDepth(135);
+    const beamB = this.add.rectangle(w * 0.60, h * 0.31, w * 0.032, h * 0.66, 0xfff0c2, 0.020).setAngle(17).setBlendMode(Phaser.BlendModes.ADD).setDepth(135);
     this.lightBeams.push(beamA, beamB);
     root.add([beamA, beamB]);
     this.tweens.add({ targets: beamA, alpha: 0.055, x: beamA.x - w * 0.018, duration: 3200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
@@ -251,21 +228,10 @@ export class GameSceneIllustrated extends GameSceneP4 {
   private handleIllustratedTap(pointer: Phaser.Input.Pointer): void {
     if (!this.worldIsVisible() || !this.isCentralTree(pointer.x, pointer.y)) return;
     if (!this.treeMotion?.active) return;
-
     const baseScaleX = this.treeMotion.scaleX;
     const baseScaleY = this.treeMotion.scaleY;
     this.tweens.killTweensOf(this.treeMotion);
-    this.tweens.add({
-      targets: this.treeMotion,
-      scaleX: baseScaleX * 1.005,
-      scaleY: baseScaleY * 1.007,
-      y: this.treeMotion.y - 2.5,
-      angle: pointer.x < this.scale.width * 0.5 ? -0.09 : 0.09,
-      duration: 115,
-      yoyo: true,
-      ease: 'Sine.out',
-      onComplete: () => this.treeMotion?.setAngle(0),
-    });
+    this.tweens.add({ targets: this.treeMotion, scaleX: baseScaleX * 1.005, scaleY: baseScaleY * 1.007, y: this.treeMotion.y - 2.5, angle: pointer.x < this.scale.width * 0.5 ? -0.09 : 0.09, duration: 115, yoyo: true, ease: 'Sine.out', onComplete: () => this.treeMotion?.setAngle(0) });
     this.spawnSapPulse(pointer.x, pointer.y);
   }
 
@@ -277,19 +243,9 @@ export class GameSceneIllustrated extends GameSceneP4 {
     const startX = Phaser.Math.Clamp(x, w * 0.43, w * 0.57);
     const startY = Phaser.Math.Clamp(y, h * 0.50, h * 0.76);
     for (let i = 0; i < 4; i += 1) {
-      const mote = this.add.circle(startX + Phaser.Math.Between(-8, 8), startY + i * 3, 2.0 + i * 0.35, 0xffdd85, 0.24)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(155);
+      const mote = this.add.circle(startX + Phaser.Math.Between(-8, 8), startY + i * 3, 2.0 + i * 0.35, 0xffdd85, 0.24).setBlendMode(Phaser.BlendModes.ADD).setDepth(155);
       root.add(mote);
-      this.tweens.add({
-        targets: mote,
-        x: w * 0.50 + Phaser.Math.Between(-55, 55),
-        y: h * (0.38 - i * 0.025),
-        alpha: 0,
-        scale: 0.45,
-        duration: 520 + i * 90,
-        ease: 'Sine.out',
-        onComplete: () => mote.destroy(),
-      });
+      this.tweens.add({ targets: mote, x: w * 0.50 + Phaser.Math.Between(-55, 55), y: h * (0.38 - i * 0.025), alpha: 0, scale: 0.45, duration: 520 + i * 90, ease: 'Sine.out', onComplete: () => mote.destroy() });
     }
   }
 
@@ -307,20 +263,14 @@ export class GameSceneIllustrated extends GameSceneP4 {
   }
 
   private removePlaceholderHelperLabels(): void {
-    const labels = [
-      'Садовник помогает оранжерее',
-      'The gardener is helping the greenhouse',
-      'Фонтан и автоматика поддерживают рост',
-      'Fountain and automation sustain growth',
-    ];
-    for (const child of this.children.list) {
-      if (child instanceof Phaser.GameObjects.Text && labels.some((label) => child.text.includes(label))) child.destroy();
-      if (child instanceof Phaser.GameObjects.Container) {
-        for (const nested of child.list) {
-          if (nested instanceof Phaser.GameObjects.Text && labels.some((label) => nested.text.includes(label))) nested.destroy();
-        }
+    const labels = ['Садовник помогает оранжерее', 'The gardener is helping the greenhouse', 'Фонтан и автоматика поддерживают рост', 'Fountain and automation sustain growth'];
+    const strip = (objects: Phaser.GameObjects.GameObject[]) => {
+      for (const object of [...objects]) {
+        if (object instanceof Phaser.GameObjects.Text && labels.some((label) => object.text.includes(label))) object.destroy();
       }
-    }
+    };
+    strip(this.children.list);
+    if (this.parentWorld?.active) strip(this.parentWorld.list);
   }
 
   private handleIllustratedResize(): void {
@@ -368,18 +318,10 @@ export class GameSceneIllustrated extends GameSceneP4 {
   }
 
   private devAction(action: 'reset' | 'boost' | 'finish'): void {
-    if (action === 'reset') {
-      resetState();
-      this.scene.restart();
-      return;
-    }
+    if (action === 'reset') { resetState(); this.scene.restart(); return; }
     const state = loadState();
     if (action === 'boost') grantGrowth(state, 1_000_000_000);
-    else {
-      state.unlocked = DISCOVERY_NODES.map((node) => node.id);
-      state.completed = true;
-      state.growth = Math.max(state.growth, 1_000_000_000);
-    }
+    else { state.unlocked = DISCOVERY_NODES.map((node) => node.id); state.completed = true; state.growth = Math.max(state.growth, 1_000_000_000); }
     saveState(state);
     this.scene.restart();
   }
@@ -390,10 +332,7 @@ export class GameSceneIllustrated extends GameSceneP4 {
     const h = this.scale.height;
     const panel = this.add.container(w / 2, h - 8).setDepth(2600);
     const mk = (x: number, text: string, action?: 'reset' | 'boost' | 'finish') => {
-      const button = this.add.text(x, 0, text, {
-        fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: action ? '#e8e0ca' : '#ffd882',
-        backgroundColor: action ? '#102017e8' : '#32200ae8', padding: { x: 8, y: 5 }, fontStyle: action ? 'normal' : 'bold',
-      }).setOrigin(0.5, 1);
+      const button = this.add.text(x, 0, text, { fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: action ? '#e8e0ca' : '#ffd882', backgroundColor: action ? '#102017e8' : '#32200ae8', padding: { x: 8, y: 5 }, fontStyle: action ? 'normal' : 'bold' }).setOrigin(0.5, 1);
       if (action) button.setInteractive({ useHandCursor: true }).on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => { ev.stopPropagation(); this.devAction(action); });
       return button;
     };
