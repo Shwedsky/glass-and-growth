@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import './styles.css';
-import { GameSceneP5 } from './game/GameSceneP5';
+import { GameSceneDiorama } from './game/GameSceneDiorama';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -8,7 +8,7 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#080d09',
   width: 1280,
   height: 720,
-  scene: [GameSceneP5],
+  scene: [GameSceneDiorama],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
