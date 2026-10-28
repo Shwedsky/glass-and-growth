@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import './styles.css';
 import { GameSceneP4 } from './game/GameSceneP4';
+import { installDevHarness } from './devHarness';
+
+installDevHarness();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
