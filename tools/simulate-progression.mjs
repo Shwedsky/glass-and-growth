@@ -45,7 +45,7 @@ function simulate(profile){
   while(!unlocked.has('final_bloom') && t<6*3600){
     const p=production(unlocked);
     const taps = unlocked.has('pump') ? profile.taps : Math.max(profile.taps,1);
-    const tapValue = Math.max(1,p.active/2);
+    const tapValue = 1 + p.active/2;
     growth += p.passive + taps*tapValue;
     let changed=true;
     while(changed){
@@ -71,4 +71,4 @@ for(const p of profiles){
   if(r.count!==32){console.error(`FAIL ${p.id}: not all nodes`);failed=true;}
 }
 if(failed) process.exit(1);
-console.log('P3 engagement economy passed: branch active/passive split + flattened late game.');
+console.log('P4 engagement economy passed: additive base tap + branch active/passive split + flattened late game.');
