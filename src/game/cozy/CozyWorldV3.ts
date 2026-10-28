@@ -49,9 +49,9 @@ export class CozyWorldV3 {
       this.canopy.rotation = Math.sin(this.clock * 0.72) * 0.0028;
     }
     for (const leaf of this.leaves) {
-      leaf.x = leaf.baseX + Math.sin(this.clock * 0.82 + leaf.phase) * 1.5;
-      leaf.y = leaf.baseY + Math.cos(this.clock * 0.67 + leaf.phase) * 1.1;
-      leaf.rotation += Math.sin(this.clock * 0.5 + leaf.phase) * 0.0008;
+      leaf.node.x = leaf.baseX + Math.sin(this.clock * 0.82 + leaf.phase) * 1.5;
+      leaf.node.y = leaf.baseY + Math.cos(this.clock * 0.67 + leaf.phase) * 1.1;
+      leaf.node.rotation += Math.sin(this.clock * 0.5 + leaf.phase) * 0.0008;
     }
   }
 
