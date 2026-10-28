@@ -1,4 +1,5 @@
 import { DISCOVERY_NODES, NODE_BY_ID, type Branch, type DiscoveryNode, type NodeId } from './content';
+import { getGenerationBonuses, resetP4Meta } from './p4Meta';
 
 export interface GameState {
   version: 2;
@@ -48,7 +49,13 @@ export function saveState(state: GameState): void {
   state.lastUpdatedAt = Date.now();
   localStorage.setItem(SAVE_KEY, JSON.stringify(state));
 }
-export function resetState(): GameState { localStorage.removeItem(SAVE_KEY); return createInitialState(); }
+
+export function resetState(): GameState {
+  localStorage.removeItem(SAVE_KEY);
+  resetP4Meta();
+  return createInitialState();
+}
+
 export function isUnlocked(state: GameState, id: NodeId): boolean { return state.unlocked.includes(id); }
 
 export function isRevealed(state: GameState, id: NodeId): boolean {
@@ -62,6 +69,7 @@ export function canBuy(state: GameState, id: NodeId): boolean {
   const node = NODE_BY_ID[id];
   return !isUnlocked(state, id) && node.requires.every((r) => isUnlocked(state, r)) && state.growth >= node.cost;
 }
+
 export function buyNode(state: GameState, id: NodeId): boolean {
   if (!canBuy(state, id)) return false;
   const node = NODE_BY_ID[id];
@@ -74,6 +82,7 @@ export function buyNode(state: GameState, id: NodeId): boolean {
 function productionMultiplier(state: GameState): number {
   return DISCOVERY_NODES.reduce((value, node) => value * (isUnlocked(state, node.id) ? node.multiplier ?? 1 : 1), 1);
 }
+
 function rawSplit(node: DiscoveryNode): { passive: number; active: number } {
   const output = node.incomePerSecond ?? 0;
   const activeShare = BRANCH_ACTIVE_SHARE[node.branch];
@@ -82,42 +91,60 @@ function rawSplit(node: DiscoveryNode): { passive: number; active: number } {
 
 export function getPassiveIncomePerSecond(state: GameState): number {
   const base = DISCOVERY_NODES.reduce((sum, node) => sum + (isUnlocked(state, node.id) ? rawSplit(node).passive : 0), 0);
-  return base * productionMultiplier(state);
+  const bonus = getGenerationBonuses();
+  return base * productionMultiplier(state) * bonus.passiveMultiplier + bonus.helperPassive;
 }
+
 export function getActiveContributionPerSecond(state: GameState): number {
   const base = DISCOVERY_NODES.reduce((sum, node) => sum + (isUnlocked(state, node.id) ? rawSplit(node).active : 0), 0);
-  return base * productionMultiplier(state);
+  return base * productionMultiplier(state) * getGenerationBonuses().tapMultiplier;
 }
+
 export function getIncomePerSecond(state: GameState): number { return getPassiveIncomePerSecond(state); }
 export function canManualTap(state: GameState): boolean { return !state.completed; }
 
+/**
+ * A manual tap always keeps its original +1 identity and talents add on top of it.
+ * This makes the node cards mathematically honest: a displayed +0.57 really raises
+ * the current tap by 0.57 instead of merely replacing part of a hidden minimum floor.
+ */
 export function getManualTapValue(state: GameState): number {
-  const active = getActiveContributionPerSecond(state);
-  return Math.max(1, active / 2);
+  return 1 + getActiveContributionPerSecond(state) / 2;
 }
+
 export function getNodeSplit(node: DiscoveryNode): { passivePerSecond: number; tapPerTap: number } {
   const split = rawSplit(node);
-  return { passivePerSecond: split.passive, tapPerTap: split.active / 2 };
+  const bonus = getGenerationBonuses();
+  return {
+    passivePerSecond: split.passive * bonus.passiveMultiplier,
+    tapPerTap: (split.active / 2) * bonus.tapMultiplier,
+  };
 }
+
 export function getActiveEventReward(state: GameState): number {
   const totalCapacity = getPassiveIncomePerSecond(state) + getActiveContributionPerSecond(state);
   return Math.max(5, Math.round(totalCapacity * 4));
 }
+
 export function grantGrowth(state: GameState, amount: number): void {
   if (amount <= 0 || !Number.isFinite(amount)) return;
   state.growth += amount;
   state.lifetimeGrowth += amount;
 }
+
 export function collectActiveEvent(state: GameState): number {
   const reward = getActiveEventReward(state);
   grantGrowth(state, reward);
   state.activeEventsCollected += 1;
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('gg-world-event', { detail: { reward } }));
   return reward;
 }
+
 export function simulate(state: GameState, deltaSeconds: number): void {
   if (deltaSeconds <= 0) return;
   grantGrowth(state, getPassiveIncomePerSecond(state) * deltaSeconds);
 }
+
 export function applyOfflineProgress(state: GameState, now = Date.now()): number {
   const elapsedSeconds = Math.max(0, (now - state.lastUpdatedAt) / 1000);
   const creditedSeconds = Math.min(elapsedSeconds, 20 * 60);
