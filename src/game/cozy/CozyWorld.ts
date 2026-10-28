@@ -1,2 +1,2 @@
-export { CozyWorldV2 as CozyWorld } from './CozyWorldV2';
-export type { WorldReaction } from './CozyWorldV2';
+export { CozyWorldV3 as CozyWorld } from './CozyWorldV3';
+export type { WorldReaction } from './CozyWorldV3';
