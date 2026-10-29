@@ -68,8 +68,11 @@ if (main.includes('phaserCompat')) fail('main.ts re-imported phaserCompat');
 const tree = read('src/game/DiscoveryTreeView.ts');
 if (!tree.includes('popoverSafeBounds')) fail('discovery hover safe corridor missing');
 if (!tree.includes("scene.input.on('pointermove'")) fail('discovery pointer-coordinate lifecycle missing');
+if (!tree.includes("scene.input.on('pointerdown'")) fail('discovery touch/click lifecycle missing');
 if (/hit\.on\(['"]pointerout['"]/.test(tree)) fail('node pointerout race reintroduced');
 if (/hover\s*=\s*this\.scene\.add\.rectangle/.test(tree)) fail('popover interception overlay reintroduced');
+if (!tree.includes("hit.on('pointerdown'")) fail('node tap-to-open support missing');
+if (!tree.includes('clear(): void')) fail('discovery hidden-tree cleanup missing');
 if (!tree.includes('onPurchase')) fail('discovery purchase callback missing');
 
 const scene = read('src/game/GameScene.ts');
@@ -77,6 +80,9 @@ if (!scene.includes('Phaser.Scenes.Events.SHUTDOWN')) fail('scene shutdown clean
 if (!scene.includes("this.scale.off('resize'")) fail('resize listener cleanup missing');
 if (!scene.includes('removeDevShortcuts')) fail('DEV keyboard cleanup missing');
 if (!scene.includes('saveP4Meta(this.meta)')) fail('generation meta persistence missing');
+if (!scene.includes('skipShutdownPersist')) fail('reset/shutdown persistence guard missing');
+if (!scene.includes('this.discoveryTree.clear()')) fail('hidden discovery tree cleanup missing');
+if (!scene.includes('if (offline > 0) saveState(this.state)')) fail('offline progress immediate persistence missing');
 
 const world = read('src/game/cozy/CozyWorld.ts');
 if (!world.includes('killRootTweens')) fail('world rebuild tween cleanup missing');
@@ -96,7 +102,8 @@ if (!packageJson.dependencies?.phaser) fail('Phaser runtime dependency missing')
 note(`audited ${sourceFiles.length} TypeScript source files`);
 note(`discovery nodes: ${nodeCount}/32`);
 note('hover card uses coordinate safe corridor instead of node pointerout race');
-note('scene/world cleanup guards are present');
+note('mouse + tap-to-open discovery interaction is present');
+note('scene/world/reset cleanup guards are present');
 
 if (failures.length) {
   console.error('Runtime audit FAILED:');
