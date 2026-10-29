@@ -1,22 +1,21 @@
 import Phaser from 'phaser';
-import { CozyWorldV4, type WorldReaction } from './CozyWorldV4';
+import { CozyWorldV5, type WorldReaction } from './CozyWorldV5';
 import type { GameState } from '../model';
 import type { P4MetaState } from '../p4Meta';
 
 /**
  * Stable public facade for the procedural greenhouse.
- * It owns rebuild hygiene so repeated tap-vigor/world-state renders cannot leave
- * infinite tweens attached to destroyed Phaser objects.
+ * V5 owns the dense world/crew layer while this facade guarantees rebuild hygiene.
  */
 export class CozyWorld {
-  private readonly base: CozyWorldV4;
+  private readonly base: CozyWorldV5;
   private rebuildSignature = '';
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly root: Phaser.GameObjects.Container,
   ) {
-    this.base = new CozyWorldV4(scene, root);
+    this.base = new CozyWorldV5(scene, root);
   }
 
   sync(state: GameState, meta: P4MetaState, force = false): void {
@@ -24,6 +23,8 @@ export class CozyWorld {
       this.scene.scale.width,
       this.scene.scale.height,
       meta.generation,
+      meta.crewPoints,
+      meta.crewUpgrades.join(','),
       Math.floor(meta.treeVigor / 3),
       ...state.unlocked,
     ].join('|');
@@ -56,6 +57,7 @@ export class CozyWorld {
   }
 
   destroy(): void {
+    this.base.destroy();
     this.killRootTweens();
   }
 
