@@ -18,31 +18,40 @@ import {
   type GameState,
 } from './model';
 import {
+  CREW_UPGRADES,
   advanceGeneration,
   applyManualTap,
   applyWorldEvent,
+  buyCrewUpgrade,
+  canBuyCrewUpgrade,
+  getCrewUpgrade,
   loadP4Meta,
   saveP4Meta,
+  type CrewUpgradeId,
   type P4MetaState,
 } from './p4Meta';
 import { loadLocale, nodeNameKey, saveLocale, t, type Locale } from '../i18n';
 import { CozyWorld, type WorldReaction } from './cozy/CozyWorld';
 import { DiscoveryTreeView } from './DiscoveryTreeView';
+import { CrewTreeView } from './CrewTreeView';
 
 type EventDef = {
-  requires: NodeId;
+  requires?: NodeId;
+  minGeneration?: 1 | 2 | 3;
   reaction: WorldReaction;
-  glyph: string;
+  hits: number;
   ru: string;
   en: string;
+  passiveBoost?: boolean;
 };
 
 const ACTIVE_EVENTS: EventDef[] = [
-  { requires: 'pump', reaction: 'water', glyph: '!', ru: 'Подтолкнуть помпу', en: 'Nudge the pump' },
-  { requires: 'gutters', reaction: 'water', glyph: '!', ru: 'Направить поток', en: 'Guide the flow' },
-  { requires: 'glass', reaction: 'light', glyph: '!', ru: 'Поймать солнечный луч', en: 'Catch a sunbeam' },
-  { requires: 'flowers', reaction: 'petals', glyph: '!', ru: 'Помочь цветам', en: 'Help the flowers' },
-  { requires: 'bees', reaction: 'life', glyph: '!', ru: 'Помочь опылению', en: 'Help pollination' },
+  { requires: 'pump', reaction: 'water', hits: 8, ru: 'Разогнать помпу', en: 'Prime the pump' },
+  { requires: 'gutters', reaction: 'water', hits: 9, ru: 'Продавить поток', en: 'Push the flow' },
+  { requires: 'glass', reaction: 'light', hits: 7, ru: 'Поймать солнечный луч', en: 'Catch the sunbeam' },
+  { requires: 'flowers', reaction: 'petals', hits: 10, ru: 'Помочь цветам', en: 'Help the flowers' },
+  { requires: 'bees', reaction: 'life', hits: 10, ru: 'Ускорить опыление', en: 'Boost pollination' },
+  { minGeneration: 2, reaction: 'gardener', hits: 10, ru: 'Ускорить садовника', en: 'Hurry the gardener', passiveBoost: true },
 ];
 
 export class GameScene extends Phaser.Scene {
@@ -52,19 +61,26 @@ export class GameScene extends Phaser.Scene {
 
   private worldLayer!: Phaser.GameObjects.Container;
   private treeLayer!: Phaser.GameObjects.Container;
+  private crewLayer!: Phaser.GameObjects.Container;
   private hudLayer!: Phaser.GameObjects.Container;
   private world!: CozyWorld;
   private discoveryTree!: DiscoveryTreeView;
+  private crewTree!: CrewTreeView;
 
   private treeOpen = false;
+  private crewOpen = false;
   private uiAccumulator = 0;
   private saveAccumulator = 0;
   private eventCountdown = 6;
   private activeEvent?: Phaser.GameObjects.Container;
   private activeEventTimer?: Phaser.Time.TimerEvent;
+  private activeEventDef?: EventDef;
+  private activeEventHits = 0;
+  private activeEventStartedAt = 0;
   private toast?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
   private skipShutdownPersist = false;
+  private passiveBoostUntil = 0;
 
   private growthText?: Phaser.GameObjects.Text;
   private rateText?: Phaser.GameObjects.Text;
@@ -86,12 +102,18 @@ export class GameScene extends Phaser.Scene {
 
     this.worldLayer = this.add.container(0, 0).setDepth(0);
     this.treeLayer = this.add.container(0, 0).setDepth(500).setVisible(false);
+    this.crewLayer = this.add.container(0, 0).setDepth(600).setVisible(false);
     this.hudLayer = this.add.container(0, 0).setDepth(1000);
     this.world = new CozyWorld(this, this.worldLayer);
     this.discoveryTree = new DiscoveryTreeView(this, this.treeLayer, {
       getState: () => this.state,
       getLocale: () => this.locale,
       onPurchase: (node) => this.purchaseNode(node),
+    });
+    this.crewTree = new CrewTreeView(this, this.crewLayer, {
+      getMeta: () => this.meta,
+      getLocale: () => this.locale,
+      onPurchase: (id) => this.purchaseCrewUpgrade(id),
     });
 
     this.input.on('pointerdown', this.handleWorldTap, this);
@@ -107,13 +129,13 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const seconds = Math.min(delta / 1000, 0.25);
-    simulate(this.state, seconds);
-    if (!this.treeOpen) this.world.update(seconds);
+    simulate(this.state, seconds * this.currentPassiveBoost());
+    if (!this.treeOpen && !this.crewOpen) this.world.update(seconds);
 
     this.uiAccumulator += seconds;
     this.saveAccumulator += seconds;
 
-    if (!this.treeOpen && !this.state.completed && isUnlocked(this.state, 'pump')) {
+    if (!this.treeOpen && !this.crewOpen && !this.state.completed && isUnlocked(this.state, 'pump')) {
       this.eventCountdown -= seconds;
       if (this.eventCountdown <= 0 && !this.activeEvent) this.spawnActiveEvent();
     }
@@ -137,7 +159,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleWorldTap(pointer: Phaser.Input.Pointer): void {
-    if (this.treeOpen || this.state.completed || !canManualTap(this.state)) return;
+    if (this.treeOpen || this.crewOpen || this.state.completed || !canManualTap(this.state)) return;
     if (!this.world.treeHitTest(pointer.x, pointer.y)) return;
 
     const amount = getManualTapValue(this.state);
@@ -154,9 +176,12 @@ export class GameScene extends Phaser.Scene {
     this.world.sync(this.state, this.meta, forceWorld);
     if (this.treeOpen) this.discoveryTree.render();
     else this.discoveryTree.clear();
+    if (this.crewOpen) this.crewTree.render();
+    else this.crewTree.clear();
     this.renderHud();
-    this.worldLayer.setVisible(!this.treeOpen);
+    this.worldLayer.setVisible(!this.treeOpen && !this.crewOpen);
     this.treeLayer.setVisible(this.treeOpen);
+    this.crewLayer.setVisible(this.crewOpen);
     if (this.state.completed) this.renderGenerationEnding();
   }
 
@@ -174,13 +199,14 @@ export class GameScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
     const compact = w < 760;
-    const compactTree = compact && this.treeOpen;
-    const menuW = compactTree ? Math.min(136, w * 0.36) : compact ? Math.min(150, w * 0.40) : 220;
-    const menuH = compactTree ? 42 : 54;
+    const overlayOpen = this.treeOpen || this.crewOpen;
+    const compactOverlay = compact && overlayOpen;
+    const menuW = compactOverlay ? Math.min(136, w * 0.36) : compact ? Math.min(150, w * 0.40) : 220;
+    const menuH = compactOverlay ? 42 : 54;
     const menuX = w - menuW - (compact ? 8 : 12);
-    const menuY = compactTree ? 8 : 12;
+    const menuY = compactOverlay ? 8 : 12;
 
-    if (!compactTree) {
+    if (!compactOverlay) {
       const panelW = compact ? Math.max(150, w - menuW - 34) : Math.min(360, w * 0.30);
       const panelH = compact ? 92 : 108;
       const panel = this.add.graphics();
@@ -203,7 +229,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const affordable = this.affordableNodeIds().length;
-    if (affordable > 0 && !this.treeOpen) {
+    if (affordable > 0 && !overlayOpen) {
       const aura = this.add.circle(menuX + menuW / 2, menuY + menuH / 2, menuH * 0.72, 0xf2d483, 0.045)
         .setStrokeStyle(2, 0xffe49c, 0.34);
       this.hudLayer.add(aura);
@@ -218,11 +244,17 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5);
     menu.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
-      this.treeOpen = !this.treeOpen;
+      if (this.treeOpen) this.treeOpen = false;
+      else {
+        this.treeOpen = true;
+        this.crewOpen = false;
+      }
       this.clearActiveEvent();
       this.renderAll(false);
     });
     this.hudLayer.add([menu, this.menuLabel]);
+
+    if (this.meta.generation >= 2) this.renderCrewButton(compact, menuX, menuY + menuH + 10, menuW, compactOverlay ? 38 : 46);
 
     const reset = this.add.text(10, h - 8, this.localize('Сбросить прогресс', 'Reset progress'), {
       fontFamily: 'system-ui, sans-serif', fontSize: compact ? '9px' : '11px', color: '#9db49f', backgroundColor: '#102018dd', padding: { x: 7, y: 4 },
@@ -249,13 +281,48 @@ export class GameScene extends Phaser.Scene {
     this.updateHudValues();
   }
 
+  private renderCrewButton(compact: boolean, x: number, y: number, width: number, height: number): void {
+    const affordable = CREW_UPGRADES.some((upgrade) => canBuyCrewUpgrade(this.meta, upgrade.id));
+    if (affordable && !this.treeOpen && !this.crewOpen) {
+      const aura = this.add.ellipse(x + width / 2, y + height / 2, width * 0.92, height * 1.35, 0xe0b86c, 0.045)
+        .setStrokeStyle(2, 0xf0cf83, 0.28);
+      this.hudLayer.add(aura);
+      this.tweens.add({ targets: aura, alpha: 0.10, scale: 1.04, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    }
+
+    const button = this.add.rectangle(x + width / 2, y + height / 2, width, height, 0x1c2d23, 0.94)
+      .setStrokeStyle(2, 0x9f7b49, 0.82)
+      .setInteractive({ useHandCursor: true });
+    const label = this.add.text(button.x, button.y,
+      this.crewOpen
+        ? this.localize('← В оранжерею', '← Greenhouse')
+        : `${this.localize('Команда', 'Crew')} • ${this.meta.crewPoints}`,
+      { fontFamily: 'Georgia, serif', fontSize: compact ? '11px' : '14px', color: '#e6cf99', fontStyle: 'bold' },
+    ).setOrigin(0.5);
+    button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      if (this.crewOpen) this.crewOpen = false;
+      else {
+        this.crewOpen = true;
+        this.treeOpen = false;
+      }
+      this.clearActiveEvent();
+      this.renderAll(false);
+    });
+    this.hudLayer.add([button, label]);
+  }
+
   private updateHudValues(): void {
-    const passive = getIncomePerSecond(this.state);
+    const passive = getIncomePerSecond(this.state) * this.currentPassiveBoost();
     const tap = getManualTapValue(this.state);
     const affordable = this.affordableNodeIds().length;
+    const boostRemaining = Math.max(0, Math.ceil((this.passiveBoostUntil - this.time.now) / 1000));
     this.growthText?.setText(this.localize(`Рост ${this.formatNumber(this.state.growth)}`, `Growth ${this.formatNumber(this.state.growth)}`));
     this.rateText?.setText(this.localize(`Пассив +${this.formatNumber(passive)}/с  •  Тап +${this.formatNumber(tap)}`, `Passive +${this.formatNumber(passive)}/s  •  Tap +${this.formatNumber(tap)}`));
-    this.stageText?.setText(this.localize(`Этап ${this.state.unlocked.length}/32  •  Поколение ${this.meta.generation}`, `Stage ${this.state.unlocked.length}/32  •  Generation ${this.meta.generation}`));
+    this.stageText?.setText(this.localize(
+      `Этап ${this.state.unlocked.length}/32  •  Поколение ${this.meta.generation}${boostRemaining > 0 ? `  •  ⚡ +50% ${boostRemaining}с` : ''}`,
+      `Stage ${this.state.unlocked.length}/32  •  Generation ${this.meta.generation}${boostRemaining > 0 ? `  •  ⚡ +50% ${boostRemaining}s` : ''}`,
+    ));
     this.menuLabel?.setText(this.treeOpen
       ? this.localize('← В оранжерею', '← Greenhouse')
       : `${this.localize('✦ Открытия', '✦ Discoveries')}${affordable ? ` (${affordable})` : ''}`);
@@ -269,61 +336,110 @@ export class GameScene extends Phaser.Scene {
     this.showToast(this.localize(`Открыто: ${t(this.locale, nodeNameKey(node.id))}`, `Unlocked: ${t(this.locale, nodeNameKey(node.id))}`));
   }
 
+  private purchaseCrewUpgrade(id: CrewUpgradeId): void {
+    const before = this.meta.crewUpgrades.length;
+    this.meta = buyCrewUpgrade(this.meta, id);
+    if (this.meta.crewUpgrades.length === before) return;
+    this.persistProgress();
+    const upgrade = getCrewUpgrade(id);
+    this.renderAll(true);
+    this.showToast(this.locale === 'ru' ? `Команда: ${upgrade.ru}` : `Crew: ${upgrade.en}`);
+  }
+
   private spawnActiveEvent(): void {
-    const eligible = ACTIVE_EVENTS.filter((event) => isUnlocked(this.state, event.requires));
-    if (eligible.length === 0 || this.treeOpen || this.state.completed) {
+    const eligible = ACTIVE_EVENTS.filter((event) => {
+      const nodeReady = event.requires ? isUnlocked(this.state, event.requires) : true;
+      const generationReady = event.minGeneration ? this.meta.generation >= event.minGeneration : true;
+      return nodeReady && generationReady;
+    });
+    if (eligible.length === 0 || this.treeOpen || this.crewOpen || this.state.completed) {
       this.eventCountdown = 5;
       return;
     }
 
     const def = eligible[Math.floor(Math.random() * eligible.length)];
     const anchor = this.world.eventAnchor(def.reaction);
-    const container = this.add.container(anchor.x, anchor.y).setDepth(800).setSize(150, 90).setInteractive({ useHandCursor: true });
-    const aura = this.add.circle(0, 0, 36, 0xf5d985, 0.08).setStrokeStyle(3, 0xffe59d, 0.8);
-    const core = this.add.circle(0, 0, 25, 0x173126, 0.96).setStrokeStyle(2, 0xf2d58a, 0.95);
-    const glyph = this.add.text(0, -2, def.glyph, { fontFamily: 'Georgia, serif', fontSize: '23px', color: '#ffe9aa', fontStyle: 'bold' }).setOrigin(0.5);
-    const label = this.add.text(0, 39, this.locale === 'ru' ? def.ru : def.en, {
-      fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#f2e7c4', backgroundColor: '#0d1c15e8', padding: { x: 7, y: 4 },
+    const width = def.reaction === 'gardener' ? 150 : 126;
+    const height = def.reaction === 'water' ? 118 : 92;
+    const container = this.add.container(anchor.x, anchor.y).setDepth(800).setSize(width, height).setInteractive({ useHandCursor: true });
+    const glow = this.add.ellipse(0, 0, width * 0.86, height * 0.78, 0xf5d985, 0.035).setStrokeStyle(3, 0xffdf83, 0.76);
+    const label = this.add.text(0, -height * 0.52, this.locale === 'ru' ? def.ru : def.en, {
+      fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#f5e6b8', backgroundColor: '#0d1c15e8', padding: { x: 7, y: 4 }, fontStyle: 'bold',
     }).setOrigin(0.5);
-    container.add([aura, core, glyph, label]);
+    const counter = this.add.text(0, height * 0.50, `0/${def.hits}`, {
+      fontFamily: 'Georgia, serif', fontSize: '13px', color: '#ffe39b', backgroundColor: '#0d1c15dd', padding: { x: 7, y: 3 },
+    }).setOrigin(0.5);
+    container.add([glow, label, counter]);
     this.worldLayer.add(container);
-    this.tweens.add({ targets: aura, scale: 1.18, alpha: 0.16, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    this.tweens.add({ targets: glow, scale: 1.08, alpha: 0.11, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+
+    this.activeEvent = container;
+    this.activeEventDef = def;
+    this.activeEventHits = 0;
+    this.activeEventStartedAt = this.time.now;
 
     container.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
-      const reward = collectActiveEvent(this.state);
-      this.meta = applyWorldEvent(this.meta);
+      if (!this.activeEvent || this.activeEventDef !== def) return;
+      this.activeEventHits += 1;
+      grantGrowth(this.state, getManualTapValue(this.state) * 0.25);
       this.world.reactEvent(def.reaction);
-      this.world.sync(this.state, this.meta);
-      this.showToast(`+${this.formatNumber(reward)}`);
-      this.persistProgress();
-      this.clearActiveEvent();
-      this.eventCountdown = 5 + Math.random() * 5;
+      counter.setText(`${this.activeEventHits}/${def.hits}`);
+      this.tweens.add({ targets: glow, scale: 1.18, alpha: 0.18, duration: 80, yoyo: true, ease: 'Quad.out' });
+      if (this.activeEventHits >= def.hits) this.completeActiveEvent(def);
       this.updateHudValues();
     });
 
-    this.activeEvent = container;
-    this.activeEventTimer = this.time.delayedCall(8500, () => {
+    this.activeEventTimer = this.time.delayedCall(9000, () => {
       this.clearActiveEvent();
       this.eventCountdown = 4 + Math.random() * 5;
     });
   }
 
+  private completeActiveEvent(def: EventDef): void {
+    const elapsed = this.time.now - this.activeEventStartedAt;
+    const critical = elapsed <= 3500;
+    const baseReward = collectActiveEvent(this.state);
+    const rewardMultiplier = critical ? 2 : 1.35;
+    const bonus = baseReward * (rewardMultiplier - 1);
+    grantGrowth(this.state, bonus);
+    this.meta = applyWorldEvent(this.meta);
+    if (def.passiveBoost) this.passiveBoostUntil = Math.max(this.passiveBoostUntil, this.time.now + 15_000);
+    this.world.reactEvent(def.reaction);
+    this.world.sync(this.state, this.meta);
+    const totalReward = baseReward + bonus;
+    const prefix = critical ? this.localize('КРИТ!', 'CRIT!') : this.localize('Готово!', 'Done!');
+    const buff = def.passiveBoost ? this.localize(' • +50% пассива на 15с', ' • +50% passive for 15s') : '';
+    this.showToast(`${prefix} +${this.formatNumber(totalReward)}${buff}`);
+    this.persistProgress();
+    this.clearActiveEvent();
+    this.eventCountdown = 6 + Math.random() * 5;
+    this.updateHudValues();
+  }
+
   private clearActiveEvent(): void {
     this.activeEventTimer?.remove(false);
     this.activeEventTimer = undefined;
-    if (!this.activeEvent) return;
-    this.killTweensRecursive(this.activeEvent);
-    this.activeEvent.destroy(true);
+    if (this.activeEvent) {
+      this.killTweensRecursive(this.activeEvent);
+      this.activeEvent.destroy(true);
+    }
     this.activeEvent = undefined;
+    this.activeEventDef = undefined;
+    this.activeEventHits = 0;
+    this.activeEventStartedAt = 0;
+  }
+
+  private currentPassiveBoost(): number {
+    return this.time.now < this.passiveBoostUntil ? 1.5 : 1;
   }
 
   private renderGenerationEnding(): void {
     const w = this.scale.width;
     const h = this.scale.height;
     const finalGeneration = this.meta.generation >= 3;
-    const panelW = Math.min(620, w * 0.62);
-    const panelH = 270;
+    const panelW = Math.min(650, w * 0.68);
+    const panelH = 292;
     const panel = this.add.graphics().setDepth(1900);
     panel.fillStyle(0x0b1b14, 0.97);
     panel.fillRoundedRect(w / 2 - panelW / 2, h * 0.50 - panelH / 2, panelW, panelH, 18);
@@ -331,25 +447,25 @@ export class GameScene extends Phaser.Scene {
     panel.strokeRoundedRect(w / 2 - panelW / 2, h * 0.50 - panelH / 2, panelW, panelH, 18);
     this.hudLayer.add(panel);
 
-    const title = this.add.text(w / 2, h * 0.42, finalGeneration ? this.localize('Оранжерея завершена', 'The greenhouse is complete') : this.localize('Дерево расцвело', 'The tree has bloomed'), {
+    const title = this.add.text(w / 2, h * 0.40, finalGeneration ? this.localize('Оранжерея завершена', 'The greenhouse is complete') : this.localize('Дерево расцвело', 'The tree has bloomed'), {
       fontFamily: 'Georgia, serif', fontSize: `${Math.max(25, w / 50)}px`, color: '#f3dda0', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(1901);
     const bodyText = finalGeneration
       ? this.localize('Три поколения превратили оранжерею в живую экосистему. Это настоящий финал текущей кампании.', 'Three generations turned the greenhouse into a living ecosystem. This is the true ending of the current campaign.')
       : this.meta.generation === 1
-        ? this.localize('Следующее дерево начнёт с уже работающими базовыми системами. В оранжерее появится садовник.', 'The next tree starts with basic systems already running. A gardener joins the greenhouse.')
-        : this.localize('Следующее поколение сохранит садовника и получит постоянную воду и автоматизацию.', 'The next generation keeps the gardener and gains permanent water and automation.');
-    const body = this.add.text(w / 2, h * 0.51, bodyText, {
+        ? this.localize('Следующее дерево даст 3 очка команды. Откроется постоянная ветка садовников и инструментов.', 'The next tree grants 3 crew points and unlocks permanent gardener/tool upgrades.')
+        : this.localize('Следующее поколение даст ещё 4 очка команды. Можно собрать полноценную бригаду.', 'The next generation grants 4 more crew points so you can build a full greenhouse crew.');
+    const body = this.add.text(w / 2, h * 0.50, bodyText, {
       fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(13, w / 96)}px`, color: '#d7e0d6', align: 'center', wordWrap: { width: panelW * 0.82 },
     }).setOrigin(0.5).setDepth(1901);
     this.hudLayer.add([title, body]);
 
     if (!finalGeneration) {
-      const button = this.add.rectangle(w / 2, h * 0.62, Math.min(300, panelW * 0.58), 48, 0x35633d, 1)
+      const button = this.add.rectangle(w / 2, h * 0.63, Math.min(320, panelW * 0.60), 48, 0x35633d, 1)
         .setStrokeStyle(2, 0xa8ce83, 1)
         .setInteractive({ useHandCursor: true })
         .setDepth(1902);
-      const label = this.add.text(w / 2, h * 0.62, this.localize('Вырастить новое дерево', 'Grow a new tree'), {
+      const label = this.add.text(w / 2, h * 0.63, this.localize('Вырастить новое дерево', 'Grow a new tree'), {
         fontFamily: 'Georgia, serif', fontSize: '16px', color: '#f4ebc7', fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(1903);
       button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
@@ -371,8 +487,10 @@ export class GameScene extends Phaser.Scene {
     this.state = fresh;
     this.meta = result.meta;
     this.treeOpen = false;
+    this.crewOpen = false;
     this.eventCountdown = 4;
     this.renderAll(true);
+    this.showToast(this.localize(`Получено очков команды: ${this.meta.crewPoints}`, `Crew points available: ${this.meta.crewPoints}`));
   }
 
   private installDevShortcuts(): void {
@@ -448,6 +566,7 @@ export class GameScene extends Phaser.Scene {
     grantGrowth(this.state, 1_000_000_000);
     this.persistProgress();
     this.treeOpen = false;
+    this.crewOpen = false;
     this.renderAll(true);
   }
 
@@ -468,11 +587,14 @@ export class GameScene extends Phaser.Scene {
     this.toast?.destroy();
     this.toast = undefined;
     this.discoveryTree?.destroy();
+    this.crewTree?.destroy();
     this.removeDevShortcuts();
     this.input.off('pointerdown', this.handleWorldTap, this);
     this.scale.off('resize', this.handleResize, this);
     this.world?.destroy();
     if (this.worldLayer) this.killTweensRecursive(this.worldLayer);
+    if (this.treeLayer) this.killTweensRecursive(this.treeLayer);
+    if (this.crewLayer) this.killTweensRecursive(this.crewLayer);
     if (this.hudLayer) this.killTweensRecursive(this.hudLayer);
   }
 
