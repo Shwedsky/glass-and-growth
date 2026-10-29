@@ -197,7 +197,7 @@ export class DiscoveryTreeView {
       this.showNodePopover(node, p, size);
     };
     hit.on('pointerover', openCard);
-    hit.on('pointerdown', (_pointer, _localX, _localY, event) => {
+    hit.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       openCard();
     });
@@ -273,7 +273,7 @@ export class DiscoveryTreeView {
       }).setOrigin(0.5);
       container.add([button, buttonText]);
       if (affordable) {
-        button.on('pointerdown', (_p, _x, _y, event) => {
+        button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
           event.stopPropagation();
           this.context.onPurchase(node);
         });
