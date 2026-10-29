@@ -213,7 +213,7 @@ export class GameScene extends Phaser.Scene {
     this.menuLabel = this.add.text(menu.x, menu.y, '', {
       fontFamily: 'Georgia, serif', fontSize: compact ? '14px' : '17px', color: '#f2deaa', fontStyle: 'bold',
     }).setOrigin(0.5);
-    menu.on('pointerdown', (_p, _x, _y, event) => {
+    menu.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.treeOpen = !this.treeOpen;
       this.clearActiveEvent();
@@ -224,7 +224,7 @@ export class GameScene extends Phaser.Scene {
     const reset = this.add.text(14, h - 12, this.localize('Сбросить прогресс', 'Reset progress'), {
       fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#9db49f', backgroundColor: '#102018dd', padding: { x: 8, y: 5 },
     }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
-    reset.on('pointerdown', (_p, _x, _y, event) => {
+    reset.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.skipShutdownPersist = true;
       resetState();
@@ -234,7 +234,7 @@ export class GameScene extends Phaser.Scene {
     const lang = this.add.text(w - 14, h - 12, this.locale === 'ru' ? 'EN' : 'RU', {
       fontFamily: 'Georgia, serif', fontSize: '12px', color: '#f1dda8', backgroundColor: '#102018dd', padding: { x: 8, y: 5 },
     }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
-    lang.on('pointerdown', (_p, _x, _y, event) => {
+    lang.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       this.locale = this.locale === 'ru' ? 'en' : 'ru';
       saveLocale(this.locale);
@@ -287,7 +287,7 @@ export class GameScene extends Phaser.Scene {
     this.worldLayer.add(container);
     this.tweens.add({ targets: aura, scale: 1.18, alpha: 0.16, duration: 850, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
-    container.on('pointerdown', (_p, _x, _y, event) => {
+    container.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
       const reward = collectActiveEvent(this.state);
       this.meta = applyWorldEvent(this.meta);
@@ -350,7 +350,7 @@ export class GameScene extends Phaser.Scene {
       const label = this.add.text(w / 2, h * 0.62, this.localize('Вырастить новое дерево', 'Grow a new tree'), {
         fontFamily: 'Georgia, serif', fontSize: '16px', color: '#f4ebc7', fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(1903);
-      button.on('pointerdown', (_p, _x, _y, event) => {
+      button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
         event.stopPropagation();
         this.startNextGeneration();
       });
@@ -416,7 +416,7 @@ export class GameScene extends Phaser.Scene {
       const x = startX + i * 82;
       const button = this.add.rectangle(x, h - 22, 72, 28, 0x20382b, 0.96).setStrokeStyle(1, 0x8dab7b, 0.8).setInteractive({ useHandCursor: true });
       const text = this.add.text(x, h - 22, label, { fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: '#e6e0bd' }).setOrigin(0.5);
-      button.on('pointerdown', (_p, _x, _y, event) => { event.stopPropagation(); fn(); });
+      button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => { event.stopPropagation(); fn(); });
       this.hudLayer.add([button, text]);
     });
   }
