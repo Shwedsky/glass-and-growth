@@ -52,7 +52,7 @@ export class CozyWorldV5 {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly root: Phaser.GameObjects.Container,
+    root: Phaser.GameObjects.Container,
   ) {
     this.base = new CozyWorldV4(scene, root);
     this.overlay = scene.add.container(0, 0).setDepth(55);
@@ -60,14 +60,12 @@ export class CozyWorldV5 {
   }
 
   sync(state: GameState, meta: P4MetaState, force = false): void {
-    // V2 used to draw a placeholder gardener/fountain. Suppress those legacy generation actors;
-    // V5 owns the coherent crew and dense foreground instead.
     const baseMeta: P4MetaState = meta.generation >= 2 ? { ...meta, generation: 1 } : meta;
     this.base.sync(state, baseMeta, force);
 
     this.w = this.scene.scale.width;
     this.h = this.scene.scale.height;
-    const sig = [
+    const signature = [
       this.w,
       this.h,
       meta.generation,
@@ -75,8 +73,8 @@ export class CozyWorldV5 {
       meta.crewUpgrades.join(','),
       state.unlocked.join(','),
     ].join('|');
-    if (!force && sig === this.signature) return;
-    this.signature = sig;
+    if (!force && signature === this.signature) return;
+    this.signature = signature;
     this.rebuildOverlay(state, meta);
   }
 
@@ -84,18 +82,17 @@ export class CozyWorldV5 {
     this.base.update(dt);
     this.clock += dt;
 
-    for (let i = 0; i < this.gardeners.length; i += 1) {
-      const g = this.gardeners[i];
-      const travel = (Math.sin(this.clock * g.speed + g.phase) + 1) / 2;
-      const direction = Math.cos(this.clock * g.speed + g.phase);
-      g.node.x = Phaser.Math.Linear(g.minX, g.maxX, travel);
-      g.node.y = g.baseY + Math.sin(this.clock * 5.8 + g.phase) * 1.7;
-      g.node.scaleX = direction >= 0 ? 1 : -1;
-      const stride = Math.sin(this.clock * 7.2 + g.phase) * 0.32;
-      g.leftLeg.rotation = stride;
-      g.rightLeg.rotation = -stride;
-      g.leftArm.rotation = -stride * 0.75 - 0.12;
-      g.rightArm.rotation = stride * 0.75 + 0.18;
+    for (const gardener of this.gardeners) {
+      const travel = (Math.sin(this.clock * gardener.speed + gardener.phase) + 1) / 2;
+      const direction = Math.cos(this.clock * gardener.speed + gardener.phase);
+      gardener.node.x = Phaser.Math.Linear(gardener.minX, gardener.maxX, travel);
+      gardener.node.y = gardener.baseY + Math.sin(this.clock * 5.8 + gardener.phase) * 1.7;
+      gardener.node.scaleX = direction >= 0 ? 1 : -1;
+      const stride = Math.sin(this.clock * 7.2 + gardener.phase) * 0.32;
+      gardener.leftLeg.rotation = stride;
+      gardener.rightLeg.rotation = -stride;
+      gardener.leftArm.rotation = -stride * 0.75 - 0.12;
+      gardener.rightArm.rotation = stride * 0.75 + 0.18;
     }
 
     for (let i = 0; i < this.fountainDrops.length; i += 1) {
@@ -160,65 +157,33 @@ export class CozyWorldV5 {
     const progress = state.unlocked.length / 32;
     const propCount = 7 + Math.floor(progress * 13);
 
-    // Hanging planters make the upper half feel inhabited instead of empty.
     for (let i = 0; i < Math.min(8, 3 + Math.floor(progress * 6)); i += 1) {
       const x = w * (0.12 + i * 0.105);
       const y = h * (0.19 + (i % 2) * 0.035);
-      const rope = this.scene.add.graphics();
-      rope.lineStyle(2, P.woodDark, 0.72);
-      rope.lineBetween(x - 12, h * 0.06, x - 4, y - 8);
-      rope.lineBetween(x + 12, h * 0.06, x + 4, y - 8);
-      rope.fillStyle(P.clay, 0.96);
-      rope.fillRoundedRect(x - 19, y - 7, 38, 18, 6);
-      rope.fillStyle(P.soil, 1);
-      rope.fillEllipse(x, y - 6, 32, 8);
-      this.overlay.add(rope);
-      const leafCount = 3 + (i % 3);
-      for (let l = 0; l < leafCount; l += 1) {
-        const leaf = this.scene.add.ellipse(x + (l - 1) * 7, y + 5 + l * 4, 15, 7, l % 2 ? P.green1 : P.green2, 0.92).setRotation((l - 1) * 0.45);
-        this.overlay.add(leaf);
+      const pot = this.scene.add.graphics();
+      pot.lineStyle(2, P.woodDark, 0.72);
+      pot.lineBetween(x - 12, h * 0.06, x - 4, y - 8);
+      pot.lineBetween(x + 12, h * 0.06, x + 4, y - 8);
+      pot.fillStyle(P.clay, 0.96);
+      pot.fillRoundedRect(x - 19, y - 7, 38, 18, 6);
+      pot.fillStyle(P.soil, 1);
+      pot.fillEllipse(x, y - 6, 32, 8);
+      this.overlay.add(pot);
+      for (let leaf = 0; leaf < 3 + (i % 3); leaf += 1) {
+        this.overlay.add(this.scene.add.ellipse(x + (leaf - 1) * 7, y + 5 + leaf * 4, 15, 7, leaf % 2 ? P.green1 : P.green2, 0.92).setRotation((leaf - 1) * 0.45));
       }
     }
 
-    // Work benches, jars, pots and crates fill the sides but leave the tree readable.
     for (let i = 0; i < propCount; i += 1) {
       const side = i % 2 === 0 ? 1 : -1;
       const lane = Math.floor(i / 2) % 5;
       const x = side > 0 ? w * (0.075 + lane * 0.025) : w * (0.925 - lane * 0.025);
       const y = h * (0.64 + (i % 4) * 0.065);
       const scale = 0.82 + (i % 3) * 0.10;
-      if (i % 4 === 0) {
-        const crate = this.scene.add.graphics();
-        crate.fillStyle(P.woodDark, 1);
-        crate.fillRoundedRect(x - 22 * scale, y - 16 * scale, 44 * scale, 32 * scale, 4);
-        crate.lineStyle(2, P.woodHi, 0.7);
-        crate.lineBetween(x - 18 * scale, y - 12 * scale, x + 18 * scale, y + 12 * scale);
-        crate.lineBetween(x + 18 * scale, y - 12 * scale, x - 18 * scale, y + 12 * scale);
-        this.overlay.add(crate);
-      } else {
-        const pot = this.scene.add.graphics();
-        pot.fillStyle(i % 3 ? P.clay : P.brass, 0.94);
-        pot.fillPoints([
-          new Phaser.Geom.Point(x - 13 * scale, y - 10 * scale),
-          new Phaser.Geom.Point(x + 13 * scale, y - 10 * scale),
-          new Phaser.Geom.Point(x + 9 * scale, y + 12 * scale),
-          new Phaser.Geom.Point(x - 9 * scale, y + 12 * scale),
-        ], true);
-        pot.fillStyle(P.soil, 1);
-        pot.fillEllipse(x, y - 9 * scale, 23 * scale, 7 * scale);
-        this.overlay.add(pot);
-        if (state.unlocked.length > 3) {
-          const stem = this.scene.add.graphics();
-          stem.lineStyle(2, P.green0, 0.9);
-          stem.lineBetween(x, y - 9 * scale, x + side * 5, y - 35 * scale);
-          this.overlay.add(stem);
-          this.overlay.add(this.scene.add.ellipse(x - 7, y - 25 * scale, 16 * scale, 8 * scale, P.green2, 0.9).setRotation(-0.35));
-          this.overlay.add(this.scene.add.ellipse(x + 8, y - 35 * scale, 16 * scale, 8 * scale, P.green1, 0.9).setRotation(0.35));
-        }
-      }
+      if (i % 4 === 0) this.drawCrate(x, y, scale);
+      else this.drawSidePot(x, y, scale, side, state.unlocked.length > 3, i);
     }
 
-    // A warm workbench becomes increasingly busy as the greenhouse develops.
     const benchY = h * 0.78;
     const bench = this.scene.add.graphics();
     bench.fillStyle(P.woodDark, 1);
@@ -229,11 +194,9 @@ export class CozyWorldV5 {
     this.overlay.add(bench);
     for (let i = 0; i < 3 + Math.floor(progress * 5); i += 1) {
       const jarX = w * (0.765 + i * 0.021);
-      const jar = this.scene.add.rectangle(jarX, benchY - 7 - (i % 2) * 4, 13, 19 + (i % 3) * 4, i % 2 ? P.brassHi : P.clay, 0.88).setStrokeStyle(1, P.woodDark, 0.55);
-      this.overlay.add(jar);
+      this.overlay.add(this.scene.add.rectangle(jarX, benchY - 7 - (i % 2) * 4, 13, 19 + (i % 3) * 4, i % 2 ? P.brassHi : P.clay, 0.88).setStrokeStyle(1, P.woodDark, 0.55));
     }
 
-    // Lanterns add visual anchors and make the map feel less empty at night-like corners.
     for (const x of [w * 0.11, w * 0.89]) {
       const lantern = this.scene.add.container(x, h * 0.52);
       lantern.add(this.scene.add.rectangle(0, 0, 20, 30, P.woodDark, 0.96).setStrokeStyle(2, P.brass, 0.9));
@@ -242,6 +205,37 @@ export class CozyWorldV5 {
       this.scene.tweens.add({ targets: glow, alpha: 0.85, scale: 1.12, duration: 1400 + (x > w / 2 ? 180 : 0), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       this.overlay.add(lantern);
     }
+  }
+
+  private drawCrate(x: number, y: number, scale: number): void {
+    const crate = this.scene.add.graphics();
+    crate.fillStyle(P.woodDark, 1);
+    crate.fillRoundedRect(x - 22 * scale, y - 16 * scale, 44 * scale, 32 * scale, 4);
+    crate.lineStyle(2, P.woodHi, 0.7);
+    crate.lineBetween(x - 18 * scale, y - 12 * scale, x + 18 * scale, y + 12 * scale);
+    crate.lineBetween(x + 18 * scale, y - 12 * scale, x - 18 * scale, y + 12 * scale);
+    this.overlay.add(crate);
+  }
+
+  private drawSidePot(x: number, y: number, scale: number, side: number, green: boolean, index: number): void {
+    const pot = this.scene.add.graphics();
+    pot.fillStyle(index % 3 ? P.clay : P.brass, 0.94);
+    pot.fillPoints([
+      new Phaser.Geom.Point(x - 13 * scale, y - 10 * scale),
+      new Phaser.Geom.Point(x + 13 * scale, y - 10 * scale),
+      new Phaser.Geom.Point(x + 9 * scale, y + 12 * scale),
+      new Phaser.Geom.Point(x - 9 * scale, y + 12 * scale),
+    ], true);
+    pot.fillStyle(P.soil, 1);
+    pot.fillEllipse(x, y - 9 * scale, 23 * scale, 7 * scale);
+    this.overlay.add(pot);
+    if (!green) return;
+    const stem = this.scene.add.graphics();
+    stem.lineStyle(2, P.green0, 0.9);
+    stem.lineBetween(x, y - 9 * scale, x + side * 5, y - 35 * scale);
+    this.overlay.add(stem);
+    this.overlay.add(this.scene.add.ellipse(x - 7, y - 25 * scale, 16 * scale, 8 * scale, P.green2, 0.9).setRotation(-0.35));
+    this.overlay.add(this.scene.add.ellipse(x + 8, y - 35 * scale, 16 * scale, 8 * scale, P.green1, 0.9).setRotation(0.35));
   }
 
   private drawGardener(index: number, count: number): void {
@@ -259,7 +253,6 @@ export class CozyWorldV5 {
     const brim = this.scene.add.ellipse(0, -49, 35, 7, 0xc89b5e, 1).setStrokeStyle(1, P.woodDark, 0.6);
     const hat = this.scene.add.ellipse(0, -53, 21, 12, 0xb9844f, 1);
     const eye = this.scene.add.circle(3, -39, 1.2, 0x3a302a, 1);
-
     const leftLeg = this.scene.add.rectangle(-7, 17, 7, 25, 0x42584e, 1).setOrigin(0.5, 0.15);
     const rightLeg = this.scene.add.rectangle(7, 17, 7, 25, 0x42584e, 1).setOrigin(0.5, 0.15);
     const leftBoot = this.scene.add.ellipse(-9, 37, 13, 7, P.woodDark, 1);
