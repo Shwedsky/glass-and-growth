@@ -395,7 +395,12 @@ export class CozyWorldV2 {
       const py = y + height * (i % 2 ? 0.28 : 0.08);
       const potColor = i % 2 ? 0x9e674b : 0x765744;
       g.fillStyle(potColor, 0.95);
-      g.fillTrapezoid(px - 7, py - 15, 14, 15, 17, 12);
+      g.fillPoints([
+        new Phaser.Geom.Point(px - 8.5, py - 15),
+        new Phaser.Geom.Point(px + 8.5, py - 15),
+        new Phaser.Geom.Point(px + 6, py),
+        new Phaser.Geom.Point(px - 6, py),
+      ], true);
       g.fillStyle(C.stoneHi, 0.5);
       g.fillRoundedRect(px - 9, py - 17, 18, 4, 2);
       if ((state.unlocked.length + i) % 3 === 0) {
@@ -801,7 +806,12 @@ export class CozyWorldV2 {
       const x = i < 2 ? w * (0.03 + i * 0.055) : w * (0.88 + (i - 2) * 0.055);
       const y = h * (0.88 + (i % 2) * 0.025);
       g.fillStyle(i % 2 ? 0x805c47 : 0x9b694d, 0.98);
-      g.fillTrapezoid(x - 15, y - 30, 30, 30, 36, 24);
+      g.fillPoints([
+        new Phaser.Geom.Point(x - 18, y - 30),
+        new Phaser.Geom.Point(x + 18, y - 30),
+        new Phaser.Geom.Point(x + 12, y),
+        new Phaser.Geom.Point(x - 12, y),
+      ], true);
       g.fillStyle(C.soil, 1);
       g.fillEllipse(x, y - 29, 31, 8);
       const green = state.unlocked.length > 6;
