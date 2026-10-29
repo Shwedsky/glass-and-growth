@@ -100,6 +100,7 @@ export class DiscoveryTreeView {
     const w = this.scene.scale.width;
     const h = this.scene.scale.height;
     const minSide = Math.min(w, h);
+    const compact = w < 760;
 
     const bg = this.scene.add.graphics();
     bg.fillStyle(0x09150f, 0.985);
@@ -110,16 +111,26 @@ export class DiscoveryTreeView {
     }
     this.layer.add(bg);
 
-    const title = this.scene.add.text(w / 2, 16, this.localize('Дерево открытий', 'Discovery Tree'), {
-      fontFamily: 'Georgia, serif', fontSize: `${Math.max(28, Math.min(46, w / 28))}px`, color: '#f0d99e', fontStyle: 'bold',
-    }).setOrigin(0.5, 0);
-    const help = this.scene.add.text(w / 2, 65, this.localize('Наведи или нажми на узел. Карточка остаётся активной по пути к кнопке.', 'Hover or tap a node. The card stays active while moving to its action button.'), {
-      fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(11, Math.min(14, w / 100))}px`, color: '#b8c8bb', align: 'center',
-    }).setOrigin(0.5, 0);
-    const progress = this.scene.add.text(14, 14, this.localize(`Этап ${state.unlocked.length}/32 • Рост ${this.formatNumber(state.growth)}`, `Stage ${state.unlocked.length}/32 • Growth ${this.formatNumber(state.growth)}`), {
-      fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#9fbea8', backgroundColor: '#102019bb', padding: { x: 7, y: 4 },
-    });
-    this.layer.add([title, help, progress]);
+    if (compact) {
+      const title = this.scene.add.text(12, 10, this.localize('Дерево', 'Discoveries'), {
+        fontFamily: 'Georgia, serif', fontSize: '20px', color: '#f0d99e', fontStyle: 'bold',
+      }).setOrigin(0, 0);
+      const progress = this.scene.add.text(12, 39, this.localize(`Этап ${state.unlocked.length}/32 • Рост ${this.formatNumber(state.growth)}`, `Stage ${state.unlocked.length}/32 • Growth ${this.formatNumber(state.growth)}`), {
+        fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: '#9fbea8', backgroundColor: '#102019bb', padding: { x: 6, y: 3 },
+      });
+      this.layer.add([title, progress]);
+    } else {
+      const title = this.scene.add.text(w / 2, 16, this.localize('Дерево открытий', 'Discovery Tree'), {
+        fontFamily: 'Georgia, serif', fontSize: `${Math.max(28, Math.min(46, w / 28))}px`, color: '#f0d99e', fontStyle: 'bold',
+      }).setOrigin(0.5, 0);
+      const help = this.scene.add.text(w / 2, 65, this.localize('Наведи или нажми на узел. Карточка остаётся активной по пути к кнопке.', 'Hover or tap a node. The card stays active while moving to its action button.'), {
+        fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(11, Math.min(14, w / 100))}px`, color: '#b8c8bb', align: 'center',
+      }).setOrigin(0.5, 0);
+      const progress = this.scene.add.text(14, 14, this.localize(`Этап ${state.unlocked.length}/32 • Рост ${this.formatNumber(state.growth)}`, `Stage ${state.unlocked.length}/32 • Growth ${this.formatNumber(state.growth)}`), {
+        fontFamily: 'system-ui, sans-serif', fontSize: '12px', color: '#9fbea8', backgroundColor: '#102019bb', padding: { x: 7, y: 4 },
+      });
+      this.layer.add([title, help, progress]);
+    }
 
     const positions = new Map<NodeId, Phaser.Math.Vector2>();
     for (const node of DISCOVERY_NODES) {
