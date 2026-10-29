@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { isUnlocked, type GameState } from '../model';
-import type { NodeId } from '../content';
 import type { P4MetaState } from '../p4Meta';
 
 export type WorldReaction = 'water' | 'petals' | 'life' | 'light';
@@ -249,7 +248,6 @@ export class CozyWorldV2 {
     g.fillRect(0, 0, w, h * 0.72);
     this.root.add(g);
 
-    // distant layered hills and forest
     const back = this.scene.add.graphics().setDepth(1);
     for (let layer = 0; layer < 3; layer += 1) {
       const alpha = 0.07 + layer * 0.04;
@@ -290,11 +288,9 @@ export class CozyWorldV2 {
     const right = w * 0.965;
     const center = w * 0.50;
 
-    // glass wall tint
     g.fillStyle(C.glass, 0.07);
     g.fillRect(left, top, right - left, bottom - top);
 
-    // warm stone foundation
     g.fillStyle(C.stone, 1);
     g.fillRect(0, bottom - h * 0.025, w, h * 0.07);
     g.fillStyle(C.stoneHi, 0.42);
@@ -303,7 +299,6 @@ export class CozyWorldV2 {
       g.fillRoundedRect(i * bw + 3, bottom - h * 0.021, bw - 6, h * 0.045, 5);
     }
 
-    // vertical iron/wood frames
     const columns = 8;
     for (let i = 0; i <= columns; i += 1) {
       const x = Phaser.Math.Linear(left, right, i / columns);
@@ -311,14 +306,12 @@ export class CozyWorldV2 {
       g.lineBetween(x, top, x, bottom);
       g.lineStyle(Math.max(3, w * 0.0028), C.frameHi, 0.94);
       g.lineBetween(x, top, x, bottom);
-      // decorative rivets
       for (let r = 1; r <= 5; r += 1) {
         g.fillStyle(C.brassHi, 0.55);
         g.fillCircle(x, Phaser.Math.Linear(top, bottom, r / 6), 2.1);
       }
     }
 
-    // roof ribs converge into central ridge
     for (let i = 0; i <= columns; i += 1) {
       const x = Phaser.Math.Linear(left, right, i / columns);
       g.lineStyle(Math.max(5, w * 0.004), C.frameDark, 0.85);
@@ -327,7 +320,6 @@ export class CozyWorldV2 {
       g.lineBetween(x, top, center, 0);
     }
 
-    // central arched window - visual focal point behind tree
     const archW = w * 0.27;
     const archH = h * 0.46;
     const archX = center - archW / 2;
@@ -341,7 +333,6 @@ export class CozyWorldV2 {
     g.lineBetween(center, archY + 6, center, archY + archH);
     g.lineBetween(archX + 6, archY + archH * 0.52, archX + archW - 6, archY + archH * 0.52);
 
-    // tile floor with perspective and softer alternating stone tones
     const floor = this.scene.add.graphics().setDepth(3);
     floor.fillGradientStyle(C.floorHi, C.floorHi, C.floorDark, C.floorDark, 1);
     floor.fillRect(0, bottom, w, h - bottom);
@@ -357,7 +348,6 @@ export class CozyWorldV2 {
     }
     this.root.add(floor);
 
-    // old vines stay dry until plant progression makes them green
     const vineGreen = isUnlocked(state, 'vines') || isUnlocked(state, 'canopy');
     this.drawHangingVine(w * 0.07, top + 8, h * 0.28, vineGreen);
     this.drawHangingVine(w * 0.91, top + 4, h * 0.33, vineGreen);
@@ -371,7 +361,6 @@ export class CozyWorldV2 {
     this.drawHangingLamp(w * 0.15, h * 0.34);
     this.drawHangingLamp(w * 0.86, h * 0.35);
 
-    // central rug / work circle grounds the tree
     const rug = this.scene.add.ellipse(w * 0.5, h * 0.82, w * 0.30, h * 0.10, 0x5a4c3f, 0.28).setDepth(7);
     this.root.add(rug);
   }
@@ -389,7 +378,6 @@ export class CozyWorldV2 {
     g.fillRoundedRect(x + width * 0.08, y + height * 0.08, width * 0.84, 8, 4);
     g.fillRoundedRect(x + width * 0.08, y + height * 0.28, width * 0.84, 7, 4);
 
-    // coherent clutter: pots, jars, tools, books
     for (let i = 0; i < 5; i += 1) {
       const px = x + width * (0.12 + i * 0.17);
       const py = y + height * (i % 2 ? 0.28 : 0.08);
@@ -411,7 +399,6 @@ export class CozyWorldV2 {
       }
     }
 
-    // watering can
     const canX = side === 'left' ? x + width * 0.73 : x + width * 0.22;
     const canY = y + height * 0.39;
     g.fillStyle(0x738c7f, 0.95);
@@ -475,7 +462,6 @@ export class CozyWorldV2 {
     const shadow = this.scene.add.ellipse(0, h * 0.023, w * (0.12 + progress * 0.12), h * 0.038, 0x213027, 0.22);
     tree.add(shadow);
 
-    // ornate central planter, coherent with greenhouse brass/wood language
     const planter = this.scene.add.graphics();
     planter.fillStyle(C.woodDark, 1);
     planter.fillRoundedRect(-w * 0.14, -2, w * 0.28, h * 0.105, 13);
@@ -491,7 +477,6 @@ export class CozyWorldV2 {
     planter.fillTriangle(-5, h * 0.050, 0, h * 0.034, 5, h * 0.050);
     tree.add(planter);
 
-    // roots become visible as tree matures
     const roots = this.scene.add.graphics();
     const rootCount = Math.max(2, Math.floor(progress * 8));
     for (let i = 0; i < rootCount; i += 1) {
@@ -801,7 +786,6 @@ export class CozyWorldV2 {
   private drawForeground(state: GameState): void {
     const w = this.w, h = this.h;
     const g = this.scene.add.graphics().setDepth(48);
-    // foreground pots create depth without hiding gameplay center
     for (let i = 0; i < 4; i += 1) {
       const x = i < 2 ? w * (0.03 + i * 0.055) : w * (0.88 + (i - 2) * 0.055);
       const y = h * (0.88 + (i % 2) * 0.025);
