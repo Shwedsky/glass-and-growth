@@ -47,9 +47,9 @@ export type DiscoveryTreeContext = {
 };
 
 /**
- * Owns the discovery-tree presentation and all hover lifecycle.
- * The popover remains open while the pointer is over the source node,
- * the gap between node and panel, or the panel itself.
+ * Owns discovery-tree presentation and interaction.
+ * Mouse users can cross from a node to its card through a safe corridor;
+ * touch users can explicitly tap a node and tap outside to dismiss the card.
  */
 export class DiscoveryTreeView {
   private popover?: Phaser.GameObjects.Container;
@@ -63,14 +63,21 @@ export class DiscoveryTreeView {
     private readonly context: DiscoveryTreeContext,
   ) {
     this.scene.input.on('pointermove', this.handlePointerMove, this);
+    this.scene.input.on('pointerdown', this.handlePointerDown, this);
     this.scene.input.on('gameout', this.schedulePopoverHide, this);
   }
 
   destroy(): void {
-    this.hidePopover();
     this.scene.input.off('pointermove', this.handlePointerMove, this);
+    this.scene.input.off('pointerdown', this.handlePointerDown, this);
     this.scene.input.off('gameout', this.schedulePopoverHide, this);
+    this.clear();
+  }
+
+  clear(): void {
+    this.hidePopover();
     this.clearLayer();
+    this.lastAffordableSignature = '';
   }
 
   hasPopover(): boolean {
@@ -90,7 +97,6 @@ export class DiscoveryTreeView {
     this.clearLayer();
 
     const state = this.context.getState();
-    const locale = this.context.getLocale();
     const w = this.scene.scale.width;
     const h = this.scene.scale.height;
     const minSide = Math.min(w, h);
@@ -107,7 +113,7 @@ export class DiscoveryTreeView {
     const title = this.scene.add.text(w / 2, 16, this.localize('Дерево открытий', 'Discovery Tree'), {
       fontFamily: 'Georgia, serif', fontSize: `${Math.max(28, Math.min(46, w / 28))}px`, color: '#f0d99e', fontStyle: 'bold',
     }).setOrigin(0.5, 0);
-    const help = this.scene.add.text(w / 2, 65, this.localize('Наведи на узел. Карточка остаётся активной, пока курсор над узлом или карточкой.', 'Hover a node. The card stays active while the pointer is over the node or card.'), {
+    const help = this.scene.add.text(w / 2, 65, this.localize('Наведи или нажми на узел. Карточка остаётся активной по пути к кнопке.', 'Hover or tap a node. The card stays active while moving to its action button.'), {
       fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(11, Math.min(14, w / 100))}px`, color: '#b8c8bb', align: 'center',
     }).setOrigin(0.5, 0);
     const progress = this.scene.add.text(14, 14, this.localize(`Этап ${state.unlocked.length}/32 • Рост ${this.formatNumber(state.growth)}`, `Stage ${state.unlocked.length}/32 • Growth ${this.formatNumber(state.growth)}`), {
@@ -186,9 +192,14 @@ export class DiscoveryTreeView {
       }).setOrigin(0.5));
     }
 
-    hit.on('pointerover', () => {
+    const openCard = () => {
       this.cancelPopoverHide();
       this.showNodePopover(node, p, size);
+    };
+    hit.on('pointerover', openCard);
+    hit.on('pointerdown', (_pointer, _localX, _localY, event) => {
+      event.stopPropagation();
+      openCard();
     });
   }
 
@@ -283,6 +294,11 @@ export class DiscoveryTreeView {
     this.schedulePopoverHide();
   }
 
+  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (!this.popover || !this.popoverSafeBounds) return;
+    if (!Phaser.Geom.Rectangle.Contains(this.popoverSafeBounds, pointer.x, pointer.y)) this.hidePopover();
+  }
+
   private schedulePopoverHide(): void {
     if (!this.popover) return;
     this.popoverHideTimer?.remove(false);
@@ -302,7 +318,13 @@ export class DiscoveryTreeView {
   }
 
   private clearLayer(): void {
-    this.scene.tweens.killTweensOf(this.layer.list);
+    const stack: Phaser.GameObjects.GameObject[] = [...this.layer.list];
+    while (stack.length > 0) {
+      const object = stack.pop()!;
+      this.scene.tweens.killTweensOf(object);
+      if (object instanceof Phaser.GameObjects.Container) stack.push(...object.list);
+    }
+    this.scene.tweens.killTweensOf(this.layer);
     this.layer.removeAll(true);
   }
 
