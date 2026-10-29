@@ -48,13 +48,15 @@ export type DiscoveryTreeContext = {
 
 /**
  * Owns discovery-tree presentation and interaction.
- * Mouse users can cross from a node to its card through a safe corridor;
- * touch users can explicitly tap a node and tap outside to dismiss the card.
+ * A currently open card owns the whole node-to-card corridor, so crossing another
+ * node while travelling to the action button cannot replace the card underneath the cursor.
  */
 export class DiscoveryTreeView {
   private popover?: Phaser.GameObjects.Container;
+  private popoverBridge?: Phaser.GameObjects.Rectangle;
   private popoverHideTimer?: Phaser.Time.TimerEvent;
   private popoverSafeBounds?: Phaser.Geom.Rectangle;
+  private activeNodeId?: NodeId;
   private lastAffordableSignature = '';
 
   constructor(
@@ -123,7 +125,7 @@ export class DiscoveryTreeView {
       const title = this.scene.add.text(w / 2, 16, this.localize('Дерево открытий', 'Discovery Tree'), {
         fontFamily: 'Georgia, serif', fontSize: `${Math.max(28, Math.min(46, w / 28))}px`, color: '#f0d99e', fontStyle: 'bold',
       }).setOrigin(0.5, 0);
-      const help = this.scene.add.text(w / 2, 65, this.localize('Наведи или нажми на узел. Карточка остаётся активной по пути к кнопке.', 'Hover or tap a node. The card stays active while moving to its action button.'), {
+      const help = this.scene.add.text(w / 2, 65, this.localize('Наведи или нажми на узел. Открытая карточка блокируется до выхода из неё.', 'Hover or tap a node. The open card stays locked until you leave it.'), {
         fontFamily: 'system-ui, sans-serif', fontSize: `${Math.max(11, Math.min(14, w / 100))}px`, color: '#b8c8bb', align: 'center',
       }).setOrigin(0.5, 0);
       const progress = this.scene.add.text(14, 14, this.localize(`Этап ${state.unlocked.length}/32 • Рост ${this.formatNumber(state.growth)}`, `Stage ${state.unlocked.length}/32 • Growth ${this.formatNumber(state.growth)}`), {
@@ -203,18 +205,20 @@ export class DiscoveryTreeView {
       }).setOrigin(0.5));
     }
 
-    const openCard = () => {
+    hit.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      if (this.popover && this.activeNodeId !== node.id && this.isInsideActiveCardZone(pointer)) return;
       this.cancelPopoverHide();
       this.showNodePopover(node, p, size);
-    };
-    hit.on('pointerover', openCard);
+    });
     hit.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
-      openCard();
+      this.cancelPopoverHide();
+      this.showNodePopover(node, p, size);
     });
   }
 
   private showNodePopover(node: DiscoveryNode, p: Phaser.Math.Vector2, nodeSize: number): void {
+    if (this.activeNodeId === node.id && this.popover) return;
     this.hidePopover();
     const state = this.context.getState();
     const locale = this.context.getLocale();
@@ -233,19 +237,30 @@ export class DiscoveryTreeView {
     const y = Phaser.Math.Clamp(p.y, panelH / 2 + 86, h - panelH / 2 - 14);
 
     const nodeRadius = nodeSize * 0.54;
-    const safeLeft = Math.min(x - panelW / 2 - 10, p.x - nodeRadius);
-    const safeTop = Math.min(y - panelH / 2 - 10, p.y - nodeRadius);
-    const safeRight = Math.max(x + panelW / 2 + 10, p.x + nodeRadius);
-    const safeBottom = Math.max(y + panelH / 2 + 10, p.y + nodeRadius);
+    const safeLeft = Math.min(x - panelW / 2 - 12, p.x - nodeRadius - 8);
+    const safeTop = Math.min(y - panelH / 2 - 12, p.y - nodeRadius - 8);
+    const safeRight = Math.max(x + panelW / 2 + 12, p.x + nodeRadius + 8);
+    const safeBottom = Math.max(y + panelH / 2 + 12, p.y + nodeRadius + 8);
     this.popoverSafeBounds = new Phaser.Geom.Rectangle(safeLeft, safeTop, safeRight - safeLeft, safeBottom - safeTop);
 
+    const bridgeLeft = toRight ? p.x + nodeRadius * 0.35 : x + panelW / 2;
+    const bridgeRight = toRight ? x - panelW / 2 : p.x - nodeRadius * 0.35;
+    const bridgeX = (bridgeLeft + bridgeRight) / 2;
+    const bridgeW = Math.max(18, Math.abs(bridgeRight - bridgeLeft) + 18);
+    const bridgeY = Phaser.Math.Linear(p.y, y, 0.5);
+    const bridgeH = Math.max(nodeSize * 0.95, Math.abs(y - p.y) + nodeSize * 0.70);
+    this.popoverBridge = this.scene.add.rectangle(bridgeX, bridgeY, bridgeW, bridgeH, 0x000000, 0.001)
+      .setInteractive({ useHandCursor: false });
+    this.layer.add(this.popoverBridge);
+
     const container = this.scene.add.container(x, y);
+    const blocker = this.scene.add.rectangle(0, 0, panelW, panelH, 0x000000, 0.001).setInteractive({ useHandCursor: false });
     const panel = this.scene.add.graphics();
     panel.fillStyle(0x102019, 0.985);
     panel.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 12);
     panel.lineStyle(2, available ? 0xd0ad61 : 0x5a7463, 0.9);
     panel.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 12);
-    container.add(panel);
+    container.add([blocker, panel]);
 
     const status = unlocked ? this.localize('ОТКРЫТО', 'UNLOCKED') : available ? this.localize('ДОСТУПНО', 'AVAILABLE') : this.localize('ПОКА СКРЫТО', 'LOCKED');
     container.add(this.scene.add.text(-panelW / 2 + 16, -panelH / 2 + 13, status, {
@@ -293,12 +308,17 @@ export class DiscoveryTreeView {
 
     this.layer.add(container);
     this.popover = container;
+    this.activeNodeId = node.id;
     this.cancelPopoverHide();
+  }
+
+  private isInsideActiveCardZone(pointer: Phaser.Input.Pointer): boolean {
+    return Boolean(this.popoverSafeBounds && Phaser.Geom.Rectangle.Contains(this.popoverSafeBounds, pointer.x, pointer.y));
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
     if (!this.popover || !this.popoverSafeBounds) return;
-    if (Phaser.Geom.Rectangle.Contains(this.popoverSafeBounds, pointer.x, pointer.y)) {
+    if (this.isInsideActiveCardZone(pointer)) {
       this.cancelPopoverHide();
       return;
     }
@@ -307,7 +327,7 @@ export class DiscoveryTreeView {
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.popover || !this.popoverSafeBounds) return;
-    if (!Phaser.Geom.Rectangle.Contains(this.popoverSafeBounds, pointer.x, pointer.y)) this.hidePopover();
+    if (!this.isInsideActiveCardZone(pointer)) this.hidePopover();
   }
 
   private schedulePopoverHide(): void {
@@ -324,6 +344,9 @@ export class DiscoveryTreeView {
   private hidePopover(): void {
     this.cancelPopoverHide();
     this.popoverSafeBounds = undefined;
+    this.activeNodeId = undefined;
+    this.popoverBridge?.destroy();
+    this.popoverBridge = undefined;
     this.popover?.destroy(true);
     this.popover = undefined;
   }
