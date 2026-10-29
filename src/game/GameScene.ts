@@ -132,6 +132,11 @@ export class GameScene extends Phaser.Scene {
     simulate(this.state, seconds * this.currentPassiveBoost());
     if (!this.treeOpen && !this.crewOpen) this.world.update(seconds);
 
+    if (this.activeEvent && this.activeEventDef && !this.treeOpen && !this.crewOpen) {
+      const anchor = this.world.eventAnchor(this.activeEventDef.reaction);
+      this.activeEvent.setPosition(anchor.x, anchor.y);
+    }
+
     this.uiAccumulator += seconds;
     this.saveAccumulator += seconds;
 
