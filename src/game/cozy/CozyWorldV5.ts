@@ -42,7 +42,7 @@ const P = {
 
 export class CozyWorldV5 {
   private readonly base: CozyWorldV4;
-  private readonly overlay: Phaser.GameObjects.Container;
+  private overlay?: Phaser.GameObjects.Container;
   private gardeners: GardenerActor[] = [];
   private fountainDrops: Phaser.GameObjects.Arc[] = [];
   private clock = 0;
@@ -52,14 +52,14 @@ export class CozyWorldV5 {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    root: Phaser.GameObjects.Container,
+    private readonly root: Phaser.GameObjects.Container,
   ) {
     this.base = new CozyWorldV4(scene, root);
-    this.overlay = scene.add.container(0, 0).setDepth(55);
-    root.add(this.overlay);
   }
 
   sync(state: GameState, meta: P4MetaState, force = false): void {
+    // The legacy base still owns the structural tree/greenhouse. It may clear the root
+    // during a rebuild, so the V5 overlay is deliberately created only afterwards.
     const baseMeta: P4MetaState = meta.generation >= 2 ? { ...meta, generation: 1 } : meta;
     this.base.sync(state, baseMeta, force);
 
@@ -73,7 +73,8 @@ export class CozyWorldV5 {
       meta.crewUpgrades.join(','),
       state.unlocked.join(','),
     ].join('|');
-    if (!force && signature === this.signature) return;
+    const overlayAlive = Boolean(this.overlay?.active && this.overlay.scene);
+    if (!force && signature === this.signature && overlayAlive) return;
     this.signature = signature;
     this.rebuildOverlay(state, meta);
   }
@@ -136,12 +137,17 @@ export class CozyWorldV5 {
 
   destroy(): void {
     this.killOverlayTweens();
-    this.overlay.removeAll(true);
+    this.overlay?.destroy(true);
+    this.overlay = undefined;
+    this.gardeners = [];
+    this.fountainDrops = [];
   }
 
   private rebuildOverlay(state: GameState, meta: P4MetaState): void {
     this.killOverlayTweens();
-    this.overlay.removeAll(true);
+    this.overlay?.destroy(true);
+    this.overlay = this.scene.add.container(0, 0).setDepth(55);
+    this.root.add(this.overlay);
     this.gardeners = [];
     this.fountainDrops = [];
 
@@ -152,6 +158,7 @@ export class CozyWorldV5 {
   }
 
   private drawDenseProps(state: GameState): void {
+    const overlay = this.overlay!;
     const w = this.w;
     const h = this.h;
     const progress = state.unlocked.length / 32;
@@ -168,9 +175,9 @@ export class CozyWorldV5 {
       pot.fillRoundedRect(x - 19, y - 7, 38, 18, 6);
       pot.fillStyle(P.soil, 1);
       pot.fillEllipse(x, y - 6, 32, 8);
-      this.overlay.add(pot);
+      overlay.add(pot);
       for (let leaf = 0; leaf < 3 + (i % 3); leaf += 1) {
-        this.overlay.add(this.scene.add.ellipse(x + (leaf - 1) * 7, y + 5 + leaf * 4, 15, 7, leaf % 2 ? P.green1 : P.green2, 0.92).setRotation((leaf - 1) * 0.45));
+        overlay.add(this.scene.add.ellipse(x + (leaf - 1) * 7, y + 5 + leaf * 4, 15, 7, leaf % 2 ? P.green1 : P.green2, 0.92).setRotation((leaf - 1) * 0.45));
       }
     }
 
@@ -191,10 +198,10 @@ export class CozyWorldV5 {
     bench.fillStyle(P.wood, 1);
     bench.fillRoundedRect(w * 0.755, benchY + 10, 9, h * 0.11, 3);
     bench.fillRoundedRect(w * 0.905, benchY + 10, 9, h * 0.11, 3);
-    this.overlay.add(bench);
+    overlay.add(bench);
     for (let i = 0; i < 3 + Math.floor(progress * 5); i += 1) {
       const jarX = w * (0.765 + i * 0.021);
-      this.overlay.add(this.scene.add.rectangle(jarX, benchY - 7 - (i % 2) * 4, 13, 19 + (i % 3) * 4, i % 2 ? P.brassHi : P.clay, 0.88).setStrokeStyle(1, P.woodDark, 0.55));
+      overlay.add(this.scene.add.rectangle(jarX, benchY - 7 - (i % 2) * 4, 13, 19 + (i % 3) * 4, i % 2 ? P.brassHi : P.clay, 0.88).setStrokeStyle(1, P.woodDark, 0.55));
     }
 
     for (const x of [w * 0.11, w * 0.89]) {
@@ -203,7 +210,7 @@ export class CozyWorldV5 {
       const glow = this.scene.add.circle(0, 0, 7, P.cream, 0.62).setBlendMode(Phaser.BlendModes.ADD);
       lantern.add(glow);
       this.scene.tweens.add({ targets: glow, alpha: 0.85, scale: 1.12, duration: 1400 + (x > w / 2 ? 180 : 0), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-      this.overlay.add(lantern);
+      overlay.add(lantern);
     }
   }
 
@@ -214,7 +221,7 @@ export class CozyWorldV5 {
     crate.lineStyle(2, P.woodHi, 0.7);
     crate.lineBetween(x - 18 * scale, y - 12 * scale, x + 18 * scale, y + 12 * scale);
     crate.lineBetween(x + 18 * scale, y - 12 * scale, x - 18 * scale, y + 12 * scale);
-    this.overlay.add(crate);
+    this.overlay!.add(crate);
   }
 
   private drawSidePot(x: number, y: number, scale: number, side: number, green: boolean, index: number): void {
@@ -228,14 +235,14 @@ export class CozyWorldV5 {
     ], true);
     pot.fillStyle(P.soil, 1);
     pot.fillEllipse(x, y - 9 * scale, 23 * scale, 7 * scale);
-    this.overlay.add(pot);
+    this.overlay!.add(pot);
     if (!green) return;
     const stem = this.scene.add.graphics();
     stem.lineStyle(2, P.green0, 0.9);
     stem.lineBetween(x, y - 9 * scale, x + side * 5, y - 35 * scale);
-    this.overlay.add(stem);
-    this.overlay.add(this.scene.add.ellipse(x - 7, y - 25 * scale, 16 * scale, 8 * scale, P.green2, 0.9).setRotation(-0.35));
-    this.overlay.add(this.scene.add.ellipse(x + 8, y - 35 * scale, 16 * scale, 8 * scale, P.green1, 0.9).setRotation(0.35));
+    this.overlay!.add(stem);
+    this.overlay!.add(this.scene.add.ellipse(x - 7, y - 25 * scale, 16 * scale, 8 * scale, P.green2, 0.9).setRotation(-0.35));
+    this.overlay!.add(this.scene.add.ellipse(x + 8, y - 35 * scale, 16 * scale, 8 * scale, P.green1, 0.9).setRotation(0.35));
   }
 
   private drawGardener(index: number, count: number): void {
@@ -263,7 +270,7 @@ export class CozyWorldV5 {
     const toolHead = this.scene.add.rectangle(30, 23, 13, 4, P.brass, 1).setRotation(0.35);
 
     node.add([shadow, leftLeg, rightLeg, leftBoot, rightBoot, body, apron, neck, head, hair, eye, brim, hat, leftArm, rightArm, toolHandle, toolHead]);
-    this.overlay.add(node);
+    this.overlay!.add(node);
 
     const spread = count <= 1 ? 0 : (index - (count - 1) / 2) * w * 0.055;
     this.gardeners.push({
@@ -295,16 +302,17 @@ export class CozyWorldV5 {
     base.fillStyle(P.stone, 1);
     base.fillRoundedRect(x - 8, y - 72, 16, 68, 6);
     base.fillEllipse(x, y - 72, 44, 13);
-    this.overlay.add(base);
+    this.overlay!.add(base);
 
     for (let i = 0; i < 15; i += 1) {
       const drop = this.scene.add.circle(x, y - 24, 2.2 + (i % 2) * 0.6, i % 3 ? P.water : P.waterHi, 0.78);
-      this.overlay.add(drop);
+      this.overlay!.add(drop);
       this.fountainDrops.push(drop);
     }
   }
 
   private killOverlayTweens(): void {
+    if (!this.overlay) return;
     const stack: Phaser.GameObjects.GameObject[] = [...this.overlay.list];
     while (stack.length > 0) {
       const object = stack.pop()!;
