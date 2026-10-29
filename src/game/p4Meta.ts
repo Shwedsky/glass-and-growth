@@ -14,15 +14,21 @@ const DEFAULT_META: P4MetaState = {
   treeVigor: 0,
 };
 
+let cachedMeta: P4MetaState | undefined;
+
 function hasStorage(): boolean {
   return typeof localStorage !== 'undefined';
 }
 
-export function loadP4Meta(): P4MetaState {
-  if (!hasStorage()) return { ...DEFAULT_META };
+function cloneMeta(meta: P4MetaState): P4MetaState {
+  return { ...meta };
+}
+
+function readMetaFromStorage(): P4MetaState {
+  if (!hasStorage()) return cloneMeta(DEFAULT_META);
   try {
     const raw = localStorage.getItem(META_KEY);
-    if (!raw) return { ...DEFAULT_META };
+    if (!raw) return cloneMeta(DEFAULT_META);
     const parsed = JSON.parse(raw) as Partial<P4MetaState>;
     const generation = Math.min(3, Math.max(1, Math.floor(Number(parsed.generation) || 1))) as 1 | 2 | 3;
     return {
@@ -32,32 +38,45 @@ export function loadP4Meta(): P4MetaState {
       treeVigor: Math.min(100, Math.max(0, Number(parsed.treeVigor) || 0)),
     };
   } catch {
-    return { ...DEFAULT_META };
+    return cloneMeta(DEFAULT_META);
   }
 }
 
+/**
+ * Returns a defensive copy of the cached generation state.
+ * Storage is read once per page lifecycle instead of once per simulation frame.
+ */
+export function loadP4Meta(): P4MetaState {
+  if (!cachedMeta) cachedMeta = readMetaFromStorage();
+  return cloneMeta(cachedMeta);
+}
+
 export function saveP4Meta(meta: P4MetaState): void {
+  cachedMeta = cloneMeta(meta);
   if (!hasStorage()) return;
-  localStorage.setItem(META_KEY, JSON.stringify(meta));
+  localStorage.setItem(META_KEY, JSON.stringify(cachedMeta));
 }
 
 export function resetP4Meta(): void {
+  cachedMeta = undefined;
   if (hasStorage()) localStorage.removeItem(META_KEY);
 }
 
-export function registerManualTap(amount: number): P4MetaState {
-  const meta = loadP4Meta();
+/** Pure tap update; callers choose when to persist. */
+export function applyManualTap(meta: P4MetaState, amount: number): P4MetaState {
+  const next = cloneMeta(meta);
   const gain = 0.32 + Math.min(0.85, Math.log10(Math.max(1, amount) + 1) * 0.18);
-  meta.treeVigor = Math.min(100, meta.treeVigor + gain);
-  saveP4Meta(meta);
-  return meta;
+  next.treeVigor = Math.min(100, next.treeVigor + gain);
+  cachedMeta = cloneMeta(next);
+  return next;
 }
 
-export function registerWorldEvent(): P4MetaState {
-  const meta = loadP4Meta();
-  meta.treeVigor = Math.min(100, meta.treeVigor + 3.5);
-  saveP4Meta(meta);
-  return meta;
+/** Pure world-event update; callers choose when to persist. */
+export function applyWorldEvent(meta: P4MetaState): P4MetaState {
+  const next = cloneMeta(meta);
+  next.treeVigor = Math.min(100, next.treeVigor + 3.5);
+  cachedMeta = cloneMeta(next);
+  return next;
 }
 
 export function getGenerationBonuses(meta = loadP4Meta()): {
