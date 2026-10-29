@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import {
   CREW_UPGRADES,
   canBuyCrewUpgrade,
-  getCrewUpgrade,
   type CrewUpgradeDef,
   type CrewUpgradeId,
   type P4MetaState,
