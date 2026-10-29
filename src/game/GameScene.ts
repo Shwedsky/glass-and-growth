@@ -174,33 +174,36 @@ export class GameScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
     const compact = w < 760;
-    const panelW = compact ? Math.min(310, w * 0.58) : Math.min(360, w * 0.30);
-    const panelH = compact ? 92 : 108;
+    const compactTree = compact && this.treeOpen;
+    const menuW = compactTree ? Math.min(136, w * 0.36) : compact ? Math.min(150, w * 0.40) : 220;
+    const menuH = compactTree ? 42 : 54;
+    const menuX = w - menuW - (compact ? 8 : 12);
+    const menuY = compactTree ? 8 : 12;
 
-    const panel = this.add.graphics();
-    panel.fillStyle(0x13251d, 0.90);
-    panel.fillRoundedRect(10, 10, panelW, panelH, 14);
-    panel.lineStyle(2, 0xc7a96c, 0.75);
-    panel.strokeRoundedRect(10, 10, panelW, panelH, 14);
-    this.hudLayer.add(panel);
+    if (!compactTree) {
+      const panelW = compact ? Math.max(150, w - menuW - 34) : Math.min(360, w * 0.30);
+      const panelH = compact ? 92 : 108;
+      const panel = this.add.graphics();
+      panel.fillStyle(0x13251d, 0.90);
+      panel.fillRoundedRect(10, 10, panelW, panelH, 14);
+      panel.lineStyle(2, 0xc7a96c, 0.75);
+      panel.strokeRoundedRect(10, 10, panelW, panelH, 14);
+      this.hudLayer.add(panel);
 
-    this.growthText = this.add.text(28, 25, '', {
-      fontFamily: 'Georgia, serif', fontSize: compact ? '18px' : '21px', color: '#f3dfac', fontStyle: 'bold',
-    });
-    this.rateText = this.add.text(28, compact ? 57 : 62, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: compact ? '13px' : '15px', color: '#d8ead5',
-    });
-    this.stageText = this.add.text(28, compact ? 78 : 87, '', {
-      fontFamily: 'system-ui, sans-serif', fontSize: compact ? '10px' : '12px', color: '#91bca0',
-    });
-    this.hudLayer.add([this.growthText, this.rateText, this.stageText]);
+      this.growthText = this.add.text(28, 25, '', {
+        fontFamily: 'Georgia, serif', fontSize: compact ? '16px' : '21px', color: '#f3dfac', fontStyle: 'bold',
+      });
+      this.rateText = this.add.text(28, compact ? 55 : 62, '', {
+        fontFamily: 'system-ui, sans-serif', fontSize: compact ? '11px' : '15px', color: '#d8ead5',
+      });
+      this.stageText = this.add.text(28, compact ? 76 : 87, '', {
+        fontFamily: 'system-ui, sans-serif', fontSize: compact ? '9px' : '12px', color: '#91bca0',
+      });
+      this.hudLayer.add([this.growthText, this.rateText, this.stageText]);
+    }
 
     const affordable = this.affordableNodeIds().length;
-    const menuW = compact ? 160 : 220;
-    const menuH = 54;
-    const menuX = w - menuW - 12;
-    const menuY = 12;
-    if (affordable > 0) {
+    if (affordable > 0 && !this.treeOpen) {
       const aura = this.add.circle(menuX + menuW / 2, menuY + menuH / 2, menuH * 0.72, 0xf2d483, 0.045)
         .setStrokeStyle(2, 0xffe49c, 0.34);
       this.hudLayer.add(aura);
@@ -211,7 +214,7 @@ export class GameScene extends Phaser.Scene {
       .setStrokeStyle(2, 0xc8a866, 0.78)
       .setInteractive({ useHandCursor: true });
     this.menuLabel = this.add.text(menu.x, menu.y, '', {
-      fontFamily: 'Georgia, serif', fontSize: compact ? '14px' : '17px', color: '#f2deaa', fontStyle: 'bold',
+      fontFamily: 'Georgia, serif', fontSize: compact ? '13px' : '17px', color: '#f2deaa', fontStyle: 'bold',
     }).setOrigin(0.5);
     menu.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
@@ -221,8 +224,8 @@ export class GameScene extends Phaser.Scene {
     });
     this.hudLayer.add([menu, this.menuLabel]);
 
-    const reset = this.add.text(14, h - 12, this.localize('Сбросить прогресс', 'Reset progress'), {
-      fontFamily: 'system-ui, sans-serif', fontSize: '11px', color: '#9db49f', backgroundColor: '#102018dd', padding: { x: 8, y: 5 },
+    const reset = this.add.text(10, h - 8, this.localize('Сбросить прогресс', 'Reset progress'), {
+      fontFamily: 'system-ui, sans-serif', fontSize: compact ? '9px' : '11px', color: '#9db49f', backgroundColor: '#102018dd', padding: { x: 7, y: 4 },
     }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
     reset.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
@@ -231,8 +234,8 @@ export class GameScene extends Phaser.Scene {
       this.scene.restart();
     });
 
-    const lang = this.add.text(w - 14, h - 12, this.locale === 'ru' ? 'EN' : 'RU', {
-      fontFamily: 'Georgia, serif', fontSize: '12px', color: '#f1dda8', backgroundColor: '#102018dd', padding: { x: 8, y: 5 },
+    const lang = this.add.text(w - 10, h - 8, this.locale === 'ru' ? 'EN' : 'RU', {
+      fontFamily: 'Georgia, serif', fontSize: compact ? '11px' : '12px', color: '#f1dda8', backgroundColor: '#102018dd', padding: { x: 7, y: 4 },
     }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
     lang.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => {
       event.stopPropagation();
@@ -242,19 +245,18 @@ export class GameScene extends Phaser.Scene {
     });
     this.hudLayer.add([reset, lang]);
 
-    if (this.devMode) this.renderDevPanel();
+    if (this.devMode) this.renderDevPanel(compact);
     this.updateHudValues();
   }
 
   private updateHudValues(): void {
-    if (!this.growthText || !this.rateText || !this.stageText || !this.menuLabel) return;
     const passive = getIncomePerSecond(this.state);
     const tap = getManualTapValue(this.state);
     const affordable = this.affordableNodeIds().length;
-    this.growthText.setText(this.localize(`Рост ${this.formatNumber(this.state.growth)}`, `Growth ${this.formatNumber(this.state.growth)}`));
-    this.rateText.setText(this.localize(`Пассив +${this.formatNumber(passive)}/с  •  Тап +${this.formatNumber(tap)}`, `Passive +${this.formatNumber(passive)}/s  •  Tap +${this.formatNumber(tap)}`));
-    this.stageText.setText(this.localize(`Этап ${this.state.unlocked.length}/32  •  Поколение ${this.meta.generation}`, `Stage ${this.state.unlocked.length}/32  •  Generation ${this.meta.generation}`));
-    this.menuLabel.setText(this.treeOpen
+    this.growthText?.setText(this.localize(`Рост ${this.formatNumber(this.state.growth)}`, `Growth ${this.formatNumber(this.state.growth)}`));
+    this.rateText?.setText(this.localize(`Пассив +${this.formatNumber(passive)}/с  •  Тап +${this.formatNumber(tap)}`, `Passive +${this.formatNumber(passive)}/s  •  Tap +${this.formatNumber(tap)}`));
+    this.stageText?.setText(this.localize(`Этап ${this.state.unlocked.length}/32  •  Поколение ${this.meta.generation}`, `Stage ${this.state.unlocked.length}/32  •  Generation ${this.meta.generation}`));
+    this.menuLabel?.setText(this.treeOpen
       ? this.localize('← В оранжерею', '← Greenhouse')
       : `${this.localize('✦ Открытия', '✦ Discoveries')}${affordable ? ` (${affordable})` : ''}`);
   }
@@ -402,20 +404,26 @@ export class GameScene extends Phaser.Scene {
     this.devFinish();
   }
 
-  private renderDevPanel(): void {
+  private renderDevPanel(compact: boolean): void {
     const w = this.scale.width;
     const h = this.scale.height;
     const items: Array<[string, () => void]> = [
       ['RESET', () => this.devReset()], ['+1B', () => this.devGrant()], ['FINISH', () => this.devFinish()],
     ];
-    const startX = w / 2 - 118;
-    this.hudLayer.add(this.add.text(startX - 58, h - 11, 'COZY DEV', {
-      fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: '#d7c485', backgroundColor: '#16261ddd', padding: { x: 6, y: 5 },
-    }).setOrigin(0, 1));
+    const gap = compact ? 66 : 82;
+    const buttonW = compact ? 58 : 72;
+    const buttonH = compact ? 26 : 28;
+    const y = compact ? h - 58 : h - 22;
+    const startX = w / 2 - gap;
+
+    this.hudLayer.add(this.add.text(compact ? w / 2 : startX - 58, compact ? y - 24 : h - 11, compact ? 'DEV' : 'COZY DEV', {
+      fontFamily: 'system-ui, sans-serif', fontSize: compact ? '9px' : '10px', color: '#d7c485', backgroundColor: '#16261ddd', padding: { x: 6, y: 4 },
+    }).setOrigin(compact ? 0.5 : 0, compact ? 0.5 : 1));
+
     items.forEach(([label, fn], i) => {
-      const x = startX + i * 82;
-      const button = this.add.rectangle(x, h - 22, 72, 28, 0x20382b, 0.96).setStrokeStyle(1, 0x8dab7b, 0.8).setInteractive({ useHandCursor: true });
-      const text = this.add.text(x, h - 22, label, { fontFamily: 'system-ui, sans-serif', fontSize: '10px', color: '#e6e0bd' }).setOrigin(0.5);
+      const x = startX + i * gap;
+      const button = this.add.rectangle(x, y, buttonW, buttonH, 0x20382b, 0.96).setStrokeStyle(1, 0x8dab7b, 0.8).setInteractive({ useHandCursor: true });
+      const text = this.add.text(x, y, label, { fontFamily: 'system-ui, sans-serif', fontSize: compact ? '9px' : '10px', color: '#e6e0bd' }).setOrigin(0.5);
       button.on('pointerdown', (_pointer: Phaser.Input.Pointer, _localX: number, _localY: number, event: Phaser.Types.Input.EventData) => { event.stopPropagation(); fn(); });
       this.hudLayer.add([button, text]);
     });
