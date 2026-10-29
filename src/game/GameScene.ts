@@ -64,6 +64,7 @@ export class GameScene extends Phaser.Scene {
   private activeEventTimer?: Phaser.Time.TimerEvent;
   private toast?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
+  private skipShutdownPersist = false;
 
   private growthText?: Phaser.GameObjects.Text;
   private rateText?: Phaser.GameObjects.Text;
@@ -76,10 +77,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.skipShutdownPersist = false;
     this.state = loadState();
     this.meta = loadP4Meta();
     this.locale = loadLocale();
     const offline = applyOfflineProgress(this.state);
+    if (offline > 0) saveState(this.state);
 
     this.worldLayer = this.add.container(0, 0).setDepth(0);
     this.treeLayer = this.add.container(0, 0).setDepth(500).setVisible(false);
@@ -150,6 +153,7 @@ export class GameScene extends Phaser.Scene {
     this.clearHudLayer();
     this.world.sync(this.state, this.meta, forceWorld);
     if (this.treeOpen) this.discoveryTree.render();
+    else this.discoveryTree.clear();
     this.renderHud();
     this.worldLayer.setVisible(!this.treeOpen);
     this.treeLayer.setVisible(this.treeOpen);
@@ -222,6 +226,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
     reset.on('pointerdown', (_p, _x, _y, event) => {
       event.stopPropagation();
+      this.skipShutdownPersist = true;
       resetState();
       this.scene.restart();
     });
@@ -417,6 +422,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private devReset(): void {
+    this.skipShutdownPersist = true;
     resetState();
     this.scene.restart();
   }
@@ -447,7 +453,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private shutdownScene(): void {
-    this.persistProgress();
+    if (!this.skipShutdownPersist) this.persistProgress();
     this.clearActiveEvent();
     this.toastTimer?.remove(false);
     this.toastTimer = undefined;
@@ -457,6 +463,7 @@ export class GameScene extends Phaser.Scene {
     this.removeDevShortcuts();
     this.input.off('pointerdown', this.handleWorldTap, this);
     this.scale.off('resize', this.handleResize, this);
+    this.world?.destroy();
     if (this.worldLayer) this.killTweensRecursive(this.worldLayer);
     if (this.hudLayer) this.killTweensRecursive(this.hudLayer);
   }
